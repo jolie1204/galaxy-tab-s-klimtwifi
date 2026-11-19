@@ -1,6 +1,6 @@
 # Linux 6.12.118 SM-T700 bring-up experiment
 
-**Cross-compiled. Device boot untested.** The outputs are an ARM `zImage` and the mainline SM-T700 device tree. They still need boot-container, ramdisk and address integration before an Android boot test.
+**Cross-compiled. Device boot untested.** The first outputs were an ARM `zImage` and the mainline SM-T700 device tree. A later [headless boot probe](probe.md) packages an updated kernel with a small embedded initramfs. Android ramdisk and HAL integration remain separate work.
 
 The test used Linux 6.12.118, the Android NDK r28b LLVM toolchain and the archived [configuration](exynos_xz.config) derived from upstream `exynos_defconfig`. It enables XZ kernel compression, appended DTB and the ARM ATAG/DTB compatibility option. [Kernel source archive](https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.118.tar.xz) · [Android NDK r28b](https://github.com/android/ndk/releases/tag/r28b)
 

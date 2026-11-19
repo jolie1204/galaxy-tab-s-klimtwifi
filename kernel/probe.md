@@ -1,0 +1,65 @@
+# SM-T700 Linux 6.12 headless boot probe
+
+**Built and staged in TWRP RAM. Device boot untested.** This is a stand-alone Linux diagnostic for `klimtwifi`, with no Android userspace. The embedded init mounts procfs and sysfs and attempts to bring up USB Ethernet. It does not mount the tablet's eMMC partitions.
+
+## Recovery and boot-loader constraints
+
+- The tested Android 3.4.113 kernel has `CONFIG_KEXEC` disabled. In TWRP 3.7.0_9-0, `sys_kexec_load` resolves to the unimplemented syscall stub. Normal ADB recovery and return to the original Android work while the installed kernel responds.
+- The Galaxy Tab board device tree documents a TLB invalidation needed for Samsung's stock S-BOOT. The [ARMv7 patch](armv7-sboot-tlb.patch) adapts Arve Hjønnevåg's proposal to the Linux 6.12 decompressor. In the built binary, the guarded invalidate follows the TTBR0 write and precedes the DACR write. [Board source](https://github.com/torvalds/linux/blob/v6.12/arch/arm/boot/dts/samsung/exynos5420-galaxy-tab-common.dtsi) · [Original patch submission](https://lists.openwall.net/linux-kernel/2012/12/12/55)
+- The working boot image header declares `0x10008000`; TWRP reports kernel code beginning at `0x20008000` inside physical RAM. These describe different stages of boot. The S-BOOT entry address of the compressed image is unmeasured. The probe carries the existing format's kernel and tags fields and embeds initramfs to avoid an external ramdisk overlapping the expanded kernel. S-BOOT acceptance of a zero-size external ramdisk is untested.
+- The resulting Android boot v0 image was 6,068,224 bytes and fits the 8,388,608-byte BOOT partition. The host verified the appended DTB, initramfs, and decompressor instructions. TWRP received the exact image in RAM with a matching SHA-256. BOOT and RECOVERY matched their previous hashes, and the tablet returned to the existing Android installation.
+
+Before a device boot attempt, confirm you can use the SM-T700 hardware keys to enter the existing TWRP or Download Mode and that you have a verified copy of the current device's complete BOOT partition. If the probe fails before USB initialization, USB cannot trigger the return to TWRP. The probe has no verified automatic rollback. [SM-T700 hardware recovery and Download Mode](https://github.com/LineageOS/lineage_wiki/blob/main/_data/devices/klimtwifi.yml)
+
+## Build locally
+
+Use the source archive, NDK r28b and checked configuration specified in [the kernel build notes](README.md). Start with a fresh extraction of Linux 6.12.118. Run these commands from this directory, with `NDK_ROOT` set and the standard Linux kernel build tools installed.
+
+```bash
+kernel_src="$PWD/linux-6.12.118"
+kernel_out="$PWD/out/probe"
+toolchain="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+mkdir -p "$kernel_out"
+
+patch --fuzz=0 -p1 -d "$kernel_src" < armv7-sboot-tlb.patch
+"$toolchain/armv7a-linux-androideabi24-clang" -Os -static -Wall -Wextra -Werror \
+  probe_init.c -o "$kernel_out/probe-init"
+"$toolchain/llvm-strip" --strip-all "$kernel_out/probe-init"
+cp exynos_xz.config "$kernel_out/.config"
+cat > "$kernel_out/initramfs.list" <<EOF
+dir /dev 0755 0 0
+dir /proc 0555 0 0
+dir /sys 0555 0 0
+nod /dev/console 0600 0 0 c 5 1
+nod /dev/null 0666 0 0 c 1 3
+file /init $kernel_out/probe-init 0755 0 0
+EOF
+boot_args='console=ttySAC2,115200n8 rdinit=/init ro loglevel=7'
+"$kernel_src/scripts/config" --file "$kernel_out/.config" --set-str CMDLINE "$boot_args"
+"$kernel_src/scripts/config" --file "$kernel_out/.config" \
+  --set-str INITRAMFS_SOURCE "$kernel_out/initramfs.list"
+make -C "$kernel_src" O="$kernel_out" ARCH=arm LLVM="$toolchain/" olddefconfig
+make -C "$kernel_src" O="$kernel_out" ARCH=arm LLVM="$toolchain/" \
+  -j"$(nproc)" zImage samsung/exynos5420-klimt-wifi.dtb
+cat "$kernel_out/arch/arm/boot/zImage" \
+  "$kernel_out/arch/arm/boot/dts/samsung/exynos5420-klimt-wifi.dtb" \
+  > "$kernel_out/zImage-klimtwifi-probe-dtb"
+```
+
+Package the appended image with the AOSP tool pinned to Android 14. The stock header supplies the address fields below. This step creates a candidate boot image for offline inspection.
+
+```bash
+git clone --depth 1 --branch android-14.0.0_r1 \
+  https://android.googlesource.com/platform/system/tools/mkbootimg "$kernel_out/mkbootimg"
+python3 "$kernel_out/mkbootimg/mkbootimg.py" --header_version 0 --pagesize 2048 \
+  --kernel "$kernel_out/zImage-klimtwifi-probe-dtb" \
+  --base 0x10000000 --kernel_offset 0x00008000 --tags_offset 0x00000100 \
+  --cmdline "$boot_args" --output "$kernel_out/linux-6.12.118-klimtwifi-probe.img"
+python3 "$kernel_out/mkbootimg/unpack_bootimg.py" \
+  --boot_img "$kernel_out/linux-6.12.118-klimtwifi-probe.img" --out "$kernel_out/unpacked"
+cmp "$kernel_out/unpacked/kernel" "$kernel_out/zImage-klimtwifi-probe-dtb"
+test "$(stat -c %s "$kernel_out/linux-6.12.118-klimtwifi-probe.img")" -le 8388608
+sha256sum "$kernel_out/linux-6.12.118-klimtwifi-probe.img"
+```
+
+A device trial can look for a new USB Ethernet interface on the host. If it enumerates, use `169.254.70.1/30` on that specific interface and ping `169.254.70.2`. An ICMP reply would show that the embedded init configured `usb0`. The test's serial console is `ttySAC2` at 115200 baud. Some failures would leave both interfaces unavailable. Display output, Wi-Fi and Android integration are outside this probe.
