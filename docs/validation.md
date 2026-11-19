@@ -16,7 +16,7 @@ The inputs and [hardware-tested ZIP checksum](../checksums/hardware-tested-slim.
 
 The initial unwiped migration from Android 10 did not complete. The existing user-0 data path triggered an SELinux denial during permission migration. A clean Android 14 boot succeeded after factory reset. First setup with Google Apps recorded one `system_server` `OutOfMemoryError` while parceling Package Manager results and a restart. The underlying cause remains unverified. Setup and Play Store download succeeded after the restart.
 
-Wemo LAN discovery and control of a physical load were outside the installation check. Long-run stability, unplugged battery life, other tablet variants and raw backup restoration on hardware were untested.
+Wemo LAN discovery and control of a physical load were outside the installation check. Long-run stability, unplugged battery life, other tablet variants and a full-device restore were untested. The [subsequent BOOT-only restore](../kernel/probe.md#android-14-restoration) was verified on this tablet.
 
 On November 19, a fresh host build from the published script passed ext4, ZIP CRC and whole-file signature checks. The BOOT payload, transfer list and updater matched the hardware-tested ZIP. The fresh output SHA-256 was `4f4898ea8334b3d51621aba5661834249a800b8b0c583872a62fff2416544c6c`. The hardware tests above used the earlier archived ZIP.
 

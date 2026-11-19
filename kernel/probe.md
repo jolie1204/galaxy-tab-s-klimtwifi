@@ -15,9 +15,15 @@ Before a device boot attempt, confirm you can use the SM-T700 hardware keys to e
 
 TWRP verified the saved 8 MiB Android 14 BOOT against the live partition. The diagnostic file (6,068,224 bytes, SHA-256 `af7eea50c7054712cf38a4fba0143f0de77fba99e3ffccddb9ef63c02027b938`) replaced the BOOT prefix. After syncing and flushing the block device, the full partition matched the expected hash of the diagnostic plus the original tail. The separate RECOVERY partition also matched its pre-write hash. One normal reboot was requested.
 
-At 10:12:58 PST the host requested the reboot. TWRP disconnected one second later. During 150 seconds of observation, the same physical USB port registered no new device or network interface. There was no interface on which to run the ICMP test. No UART trace was available. Kernel entry and embedded init execution remain unconfirmed. At the end of the trial the diagnostic occupied BOOT, and physical recovery to restore Android was pending.
+At 10:12:58 PST the host requested the reboot. TWRP disconnected one second later. During 150 seconds of observation, the same physical USB port registered no new device or network interface. There was no interface on which to run the ICMP test. No UART trace was available. Kernel entry and embedded init execution remain unconfirmed. The owner later returned the tablet to TWRP. The captured previous-boot log contained neither a 6.12.118 version string nor the embedded init marker.
 
 The known-booting Android 10, Android 14 and TWRP images each carry a 16-byte `SEANDROIDENFORCE` marker immediately after the page-aligned payload. The diagnostic file ends at that boundary, and its external ramdisk size is zero. The older marker in the preserved partition tail is at the Android 14 offset. The bootloader's handling of these differences is unknown.
+
+### Android 14 restoration
+
+TWRP 3.7.0_9-0 verified the full diagnostic BOOT and original RECOVERY hashes before restoring the saved 8,388,608-byte pre-trial Android 14 BOOT. After syncing and flushing the block device, TWRP read back the complete partition and matched it to the backup. RECOVERY retained its original hash. The restore wrote only BOOT.
+
+LineageOS 21 Slim booted on Linux `3.4.113-Deathly-1.0+`. After Android first reported boot complete, `system_server` restarted once with an `OutOfMemoryError` while binding an account authenticator. After the restart the boot animation stopped, setup was complete, Bluetooth reported ON, the default Wi-Fi network was validated, and Package Manager found Play Store, Play services and Wemo Controller 4.4.0. The error’s underlying cause remains unknown.
 
 ## Build locally
 
