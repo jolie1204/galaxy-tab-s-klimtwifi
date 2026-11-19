@@ -1,15 +1,23 @@
 # SM-T700 Linux 6.12 headless boot probe
 
-**Built and staged in TWRP RAM. Device boot untested.** This is a stand-alone Linux diagnostic for `klimtwifi`, with no Android userspace. The embedded init mounts procfs and sysfs and attempts to bring up USB Ethernet. It does not mount the tablet's eMMC partitions.
+**First hardware boot attempted on November 19, 2026.** This is a stand-alone Linux diagnostic for `klimtwifi`, with no Android userspace. The embedded init mounts procfs and sysfs and attempts to bring up USB Ethernet. It does not mount the tablet's eMMC partitions.
 
 ## Recovery and boot-loader constraints
 
 - The tested Android 3.4.113 kernel has `CONFIG_KEXEC` disabled. In TWRP 3.7.0_9-0, `sys_kexec_load` resolves to the unimplemented syscall stub. Normal ADB recovery and return to the original Android work while the installed kernel responds.
 - The Galaxy Tab board device tree documents a TLB invalidation needed for Samsung's stock S-BOOT. The [ARMv7 patch](armv7-sboot-tlb.patch) adapts Arve Hjønnevåg's proposal to the Linux 6.12 decompressor. In the built binary, the guarded invalidate follows the TTBR0 write and precedes the DACR write. [Board source](https://github.com/torvalds/linux/blob/v6.12/arch/arm/boot/dts/samsung/exynos5420-galaxy-tab-common.dtsi) · [Original patch submission](https://lists.openwall.net/linux-kernel/2012/12/12/55)
-- The working boot image header declares `0x10008000`; TWRP reports kernel code beginning at `0x20008000` inside physical RAM. These describe different stages of boot. The S-BOOT entry address of the compressed image is unmeasured. The probe carries the existing format's kernel and tags fields and embeds initramfs to avoid an external ramdisk overlapping the expanded kernel. S-BOOT acceptance of a zero-size external ramdisk is untested.
+- The working boot image header declares `0x10008000`; TWRP reports kernel code beginning at `0x20008000` inside physical RAM. These describe different stages of boot. The S-BOOT entry address of the compressed image is unmeasured. The probe carries the existing format's kernel and tags fields and embeds initramfs to avoid an external ramdisk overlapping the expanded kernel. S-BOOT acceptance of a zero-size external ramdisk remains unconfirmed.
 - The resulting Android boot v0 image was 6,068,224 bytes and fits the 8,388,608-byte BOOT partition. The host verified the appended DTB, initramfs, and decompressor instructions. TWRP received the exact image in RAM with a matching SHA-256. BOOT and RECOVERY matched their previous hashes, and the tablet returned to the existing Android installation.
 
 Before a device boot attempt, confirm you can use the SM-T700 hardware keys to enter the existing TWRP or Download Mode and that you have a verified copy of the current device's complete BOOT partition. If the probe fails before USB initialization, USB cannot trigger the return to TWRP. The probe has no verified automatic rollback. [SM-T700 hardware recovery and Download Mode](https://github.com/LineageOS/lineage_wiki/blob/main/_data/devices/klimtwifi.yml)
+
+## First hardware trial
+
+TWRP verified the saved 8 MiB Android 14 BOOT against the live partition. The diagnostic file (6,068,224 bytes, SHA-256 `af7eea50c7054712cf38a4fba0143f0de77fba99e3ffccddb9ef63c02027b938`) replaced the BOOT prefix. After syncing and flushing the block device, the full partition matched the expected hash of the diagnostic plus the original tail. The separate RECOVERY partition also matched its pre-write hash. One normal reboot was requested.
+
+At 10:12:58 PST the host requested the reboot. TWRP disconnected one second later. During 150 seconds of observation, the same physical USB port registered no new device or network interface. There was no interface on which to run the ICMP test. No UART trace was available. Kernel entry and embedded init execution remain unconfirmed. At the end of the trial the diagnostic occupied BOOT, and physical recovery to restore Android was pending.
+
+The known-booting Android 10, Android 14 and TWRP images each carry a 16-byte `SEANDROIDENFORCE` marker immediately after the page-aligned payload. The diagnostic file ends at that boundary, and its external ramdisk size is zero. The older marker in the preserved partition tail is at the Android 14 offset. The bootloader's handling of these differences is unknown.
 
 ## Build locally
 
