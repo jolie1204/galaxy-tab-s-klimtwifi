@@ -1,6 +1,6 @@
 # SM-T700 Linux 6.12 headless boot probe
 
-**First hardware boot attempted on November 19, 2026.** This is a stand-alone Linux diagnostic for `klimtwifi`, with no Android userspace. The embedded init mounts procfs and sysfs and attempts to bring up USB Ethernet. It does not mount the tablet's eMMC partitions.
+**Two hardware boot attempts on November 19, 2026.** This is a stand-alone Linux diagnostic for `klimtwifi`, with no Android userspace. The embedded init mounts procfs and sysfs and attempts to bring up USB Ethernet. It does not mount the tablet's eMMC partitions.
 
 ## Recovery and boot-loader constraints
 
@@ -24,6 +24,16 @@ The known-booting Android 10, Android 14 and TWRP images each carry a 16-byte `S
 TWRP 3.7.0_9-0 verified the full diagnostic BOOT and original RECOVERY hashes before restoring the saved 8,388,608-byte pre-trial Android 14 BOOT. After syncing and flushing the block device, TWRP read back the complete partition and matched it to the backup. RECOVERY retained its original hash. The restore wrote only BOOT.
 
 LineageOS 21 Slim booted on Linux `3.4.113-Deathly-1.0+`. After Android first reported boot complete, `system_server` restarted once with an `OutOfMemoryError` while binding an account authenticator. After the restart the boot animation stopped, setup was complete, Bluetooth reported ON, the default Wi-Fi network was validated, and Package Manager found Play Store, Play services and Wemo Controller 4.4.0. The error’s underlying cause remains unknown.
+
+## Second hardware trial
+
+On November 19, 2026, a second boot image reused the first probe's exact compressed kernel, appended DTB and embedded init. The container added a gzip copy of the same initramfs as an external ramdisk and the 16-byte `SEANDROIDENFORCE` marker at the aligned payload end. The external ramdisk header offset was 64 MiB from the base. The expanded kernel image was 22,596,756 bytes, larger than the working Android header's 16 MiB ramdisk offset. Actual S-BOOT load addresses remain unmeasured.
+
+To produce this variant after the build below, keep the same kernel, command line and mkbootimg arguments. Create the external archive with `gzip -n -c "$kernel_out/usr/initramfs_data.cpio" > "$kernel_out/initramfs.cpio.gz"`, add `--ramdisk "$kernel_out/initramfs.cpio.gz" --ramdisk_offset 0x04000000` to mkbootimg, and select a separate output file. Append the marker to the newly generated image with `printf %s SEANDROIDENFORCE >> "$image"`, where `image` is that output path. Unpack it and compare both payloads to their inputs. Verify that the marker immediately follows the aligned ramdisk.
+
+The hardware candidate was 6,211,600 bytes (SHA-256 `d6541d0a85a564aa0c427209c608726d2b0f01c5b7e541fd7c0a7efc96d30f7d`). TWRP verified the original Android BOOT and separate RECOVERY. After writing the candidate, flushing and reading the entire 8 MiB BOOT, its hash matched the expected candidate plus preserved tail. RECOVERY still matched its original hash.
+
+The host requested a normal reboot at 13:10:14 PST. It monitored the tablet's physical USB port before reboot through 13:13:19 PST. TWRP disconnected after three seconds. The port stayed empty for the remaining 182 seconds, and the host kernel journal contained only the disconnect. There was no USB interface for the ping test. No UART or screen observation was available. Linux 6.12.118 kernel entry and embedded init execution remain unconfirmed. At the close of this observation the second probe occupied BOOT, pending physical return to TWRP for Android restoration.
 
 ## Build locally
 
