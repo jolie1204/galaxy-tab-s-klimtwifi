@@ -1,0 +1,44 @@
+diff --git a/lineage-sdk/lineage/lib/main/java/org/lineageos/platform/internal/common/UserContentObserver.java b/lineage-sdk/lineage/lib/main/java/org/lineageos/platform/internal/common/UserContentObserver.java
+index 8b79d91..59ab6e4 100644
+--- a/lineage-sdk/lineage/lib/main/java/org/lineageos/platform/internal/common/UserContentObserver.java
++++ b/lineage-sdk/lineage/lib/main/java/org/lineageos/platform/internal/common/UserContentObserver.java
+@@ -16,11 +16,10 @@
+ package org.lineageos.platform.internal.common;
+
+ import android.app.ActivityManagerNative;
+-import android.app.IUserSwitchObserver;
++import android.app.UserSwitchObserver;
+ import android.database.ContentObserver;
+ import android.net.Uri;
+ import android.os.Handler;
+-import android.os.IRemoteCallback;
+ import android.os.RemoteException;
+ import android.util.Log;
+
+@@ -32,24 +31,11 @@ public abstract class UserContentObserver extends ContentObserver {
+
+     private Runnable mUpdateRunnable;
+
+-    private IUserSwitchObserver mUserSwitchObserver = new IUserSwitchObserver.Stub() {
++    private final UserSwitchObserver mUserSwitchObserver = new UserSwitchObserver() {
+         @Override
+-        public void onBeforeUserSwitching(int newUserId, IRemoteCallback reply)
+-                throws RemoteException {
+-        }
+-        @Override
+-        public void onUserSwitching(int newUserId, IRemoteCallback reply) {
+-        }
+-        @Override
+-        public void onUserSwitchComplete(int newUserId) throws RemoteException {
++        public void onUserSwitchComplete(int newUserId) {
+             mHandler.post(mUpdateRunnable);
+         }
+-        @Override
+-        public void onForegroundProfileSwitch(int newProfileId) {
+-        }
+-        @Override
+-        public void onLockedBootComplete(int newUserId) {
+-        }
+     };
+
+     private Handler mHandler;
