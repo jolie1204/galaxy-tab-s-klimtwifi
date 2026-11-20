@@ -92,6 +92,28 @@ def macro(name, message, base):
     emit_record(message)
 
 
+def cache_bracket_records(run_id):
+    for name, stage, clean in [('write_at_entry', 'ENTRY', True),
+                               ('write_before_cache', 'PRECACHE', True),
+                               ('write_after_cache', 'POSTCACHE', False)]:
+        print(f".macro {name}")
+        emit_record(f'KLIMT-612-{stage} {run_id}', clean)
+    # Both callers use the same guarded writer. Its return address
+    # identifies the call site without using a stack or a live register.
+    print(""".macro write_cached_record
+    adr r1, 1f
+    ldr r2, [r1]
+    add r1, r1, r2
+    cmp lr, r1
+    beq 2f
+    write_at_entry
+    b 3f
+1:  .word .Lklimt_pre_return - 1b
+2:  write_before_cache
+3:
+.endm""")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
@@ -101,16 +123,22 @@ if __name__ == '__main__':
                       help='emit the cached vendor record for a 16-digit run ID')
     mode.add_argument('--cached-612-run', metavar='HEX_ID',
                       help='emit distinct cached entry and post-decompression records for Linux 6.12')
+    mode.add_argument('--cache-bracket-run', metavar='HEX_ID',
+                      help='also mark the first call to cache_on and its return on SM-T700')
     args = parser.parse_args()
-    run_id = args.cached_vendor_run if args.cached_vendor_run is not None else args.cached_612_run
+    run_id = next((value for value in (args.cached_vendor_run, args.cached_612_run,
+                                       args.cache_bracket_run) if value is not None), None)
     if run_id is not None:
         if not re.fullmatch(r'[0-9a-f]{16}', run_id):
             parser.error('expected sixteen lowercase hexadecimal digits')
         print(f".equ KLIMT_DATA_ECC, {FIRST_PARITY}\n.equ KLIMT_HEADER_ECC, {SIZE - ECC}")
-        print(".macro write_cached_record")
-        prefix = 'KLIMT-VENDOR-ENTRY ' if args.cached_vendor_run is not None else 'KLIMT-612-ENTRY '
-        emit_record(prefix + run_id, clean=True)
-        if args.cached_612_run is not None:
+        if args.cache_bracket_run is not None:
+            cache_bracket_records(run_id)
+        else:
+            print(".macro write_cached_record")
+            prefix = 'KLIMT-VENDOR-ENTRY ' if args.cached_vendor_run is not None else 'KLIMT-612-ENTRY '
+            emit_record(prefix + run_id, clean=True)
+        if args.cached_vendor_run is None:
             macro('klimt_mark_inflated', 'KLIMT-612-INFLATED ' + run_id, 0x40000000)
     else:
         base = 0x4d000000 if args.qemu_virt else 0x40000000

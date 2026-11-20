@@ -133,3 +133,24 @@ The host verified a separate seed in the running TWRP console and requested one 
 The 210-second monitoring window ended at 08:53:32 PST. Both physical-port polling and the host kernel USB journal recorded just the initial disconnect. Diagnostic ADB and automatic TWRP return were unobserved in this interval. The host then requested manual TWRP entry for the retained-console readback.
 
 At 11:55:42 PST a fresh TWRP boot appeared on the original USB port. Two reads returned the same 91-byte previous console (SHA-256 `5237cb42a577ba65a99f9089efa39059a97ab518e42848dd6f49c64b8af171ba`). It contained exactly one entry marker with this trial's run ID and zero matching inflated markers. The original TWRP seed was absent. Both partition hashes still matched the values above. This establishes execution of the instrumented Linux 6.12 decompressor entry on physical SM-T700 hardware. Delivery of a later marker, transfer to the expanded kernel, userspace and diagnostic ADB remain unverified. The USB records do not identify how the later recovery boot was triggered.
+
+## Fourteenth trial bracketing the first cache setup
+
+The thirteenth trial recovered the entry record. This Linux 6.12.118 diagnostic adds records immediately before and after the first conditional call to `cache_on`. The original address-selection and skip conditions still apply. The hook preserves the decompression address, boot arguments and stack pointer. The earlier entry and later post-decompression probes still run at their original stages. Each successful write replaces the preceding record in the same RAM console.
+
+| Last retained stage | Positive observation on this boot |
+| --- | --- |
+| ENTRY | The processor reached the decompressor under the incoming bootloader mapping. |
+| PRECACHE | The decompressor selected the first cache setup path and reached the point just before its call. |
+| POSTCACHE | The first call returned and its expected page table and retained RAM mapping passed the probe checks. |
+| INFLATED | Decompression returned and the post-cache-shutdown probe ran. |
+
+A missing later stage can reflect a skipped write, failure to retain it, or an earlier stall. The precache probe uses the validated cached entry writer. The postcache probe verifies SCTLR, TTBCR, TTBR0, domain access, both expected Strongly-ordered 1 MiB descriptors and the console signature before writing. ARM specifies the incoming MMU and D-cache state, while the earlier vendor control observed both enabled on this tablet. [ARM Linux boot protocol](https://docs.kernel.org/arch/arm/booting.html#calling-the-kernel-image)
+
+Apply [the first-call patch](cache-bracket.patch) after the thirteenth trial's hook patch and place [cache-bracket.inc](cache-bracket.inc) beside head.S. Generate cached-record.inc with `python3 make-marker.py --cache-bracket-run <sixteen-lowercase-hex-digits>`. Reuse the thirteenth trial's tablet DTB, expanded kernel and authenticated timed early-ADB ramdisk. The first call site and restart offsets stayed at 0xf4 and 0xf8. The compressed wrapper grew by 864 bytes. The private BOOT image measured 7,045,136 bytes, SHA-256 `62f9b5581573d55ce4d4f79e11a62b444a0514dff3dcf095676372e3fa293e12`.
+
+Four Cortex-A15 replays sampled the retained region at all four stages. They covered the normal path, an incoming aliased parity page, an invalid console signature and a changed section descriptor after the table switch. The last case retained PRECACHE at the postcache sample. The invalid signature left the full sampled region intact. Each run checked parity and write bounds for the applicable records, delivered the tablet DTB and reached the same expanded kernel bytes (SHA-256 `6cd80b8d6a61aa6319304dc40965972640f0f05f34cf03f70beae820c907bcb6`).
+
+TWRP 3.7.0_9-0 backed up the complete preceding BOOT. After the new image was written and flushed, all 8 MiB read back with SHA-256 `42e4983d917cb3bf7a822df46cf12f95c52f3d6f97336273f6a10d0a179dcd50`. RECOVERY matched its original digest. A single normal boot was requested at 13:49:30 PST on November 20, 2026. The original physical USB port detached in the same second.
+
+The 210-second window ended at 13:53:00 PST. Both the physical-port monitor and the USB kernel journal saw only the initial disconnect. No diagnostic ADB shell or new TWRP boot appeared during this interval. Manual TWRP entry was requested for the retained-console readback.

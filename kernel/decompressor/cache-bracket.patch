@@ -1,0 +1,8 @@
+--- a/arch/arm/boot/compressed/head.S
++++ b/arch/arm/boot/compressed/head.S
+@@ -333 +333 @@
+-		blcs	cache_on
++		blcs	.Lklimt_first_cache
+@@ -1448,0 +1449,2 @@
++#include "cache-bracket.inc"
++
