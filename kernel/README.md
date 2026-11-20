@@ -29,6 +29,8 @@ The mainline board tree describes eMMC, SDIO Wi-Fi power sequencing and USB gadg
 
 The subsequent [early-ADB candidate](early-adb/README.md) preserves the kernel console for recovery readback and starts authenticated ADB from RAM. It passed ARM emulation and reached a fifth SM-T700 hardware boot attempt on November 19.
 
+The [sixth hardware trial](decompressor/README.md) places two checkpoints in the ARM decompressor, before the USB and pstore drivers initialize.
+
 ## Linux 7.3.1 comparison on the build host
 
 On November 19, 2026, upstream Linux 7.3.1 compiled for SM-T700 with the previous 6.12.118 ACM probe configuration migrated using `olddefconfig`, NDK r28b, the same RAM init and the same stock S-BOOT TLB patch. The ARM zImage measured 6,348,928 bytes. The disassembled decompressor contained the TLB invalidation immediately after the translation-table update. Both the upstream board DTB (54,157 bytes) and the single-port test DTB (54,181 bytes) matched the corresponding 6.12.118 outputs byte for byte. This build did not use the SM-T280 donor series. [Upstream 7.3.1 source](https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.3.1.tar.xz) · [SM-T700 board definition](https://github.com/gregkh/linux/blob/v7.3.1/arch/arm/boot/dts/samsung/exynos5420-klimt-wifi.dts)

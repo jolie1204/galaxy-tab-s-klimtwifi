@@ -1,0 +1,19 @@
+--- a/arch/arm/boot/compressed/head.S
++++ b/arch/arm/boot/compressed/head.S
+@@ -176,0 +177,2 @@
++#include "klimt-markers.inc"
++
+@@ -259,0 +262,2 @@
++		b	.Lklimt_entry_fn
++.Lklimt_entry_return:
+@@ -641,0 +646,2 @@
++		b	.Lklimt_inflated_fn
++.Lklimt_inflated_return:
+@@ -1441,0 +1448,7 @@
++
++.Lklimt_entry_fn:
++		klimt_mark_entry
++		b	.Lklimt_entry_return
++.Lklimt_inflated_fn:
++		klimt_mark_inflated
++		b	.Lklimt_inflated_return
