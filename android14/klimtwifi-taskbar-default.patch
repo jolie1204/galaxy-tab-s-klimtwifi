@@ -1,0 +1,35 @@
+diff --git a/device/samsung/klimtwifi/overlay/lineage-sdk/packages/LineageSettingsProvider/res/values/defaults.xml b/device/samsung/klimtwifi/overlay/lineage-sdk/packages/LineageSettingsProvider/res/values/defaults.xml
+new file mode 100644
+index 0000000..936b4f3
+--- /dev/null
++++ b/device/samsung/klimtwifi/overlay/lineage-sdk/packages/LineageSettingsProvider/res/values/defaults.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <bool name="def_start_with_taskbar_disabled">true</bool>
++</resources>
+diff --git a/lineage-sdk/packages/LineageSettingsProvider/res/values/defaults.xml b/lineage-sdk/packages/LineageSettingsProvider/res/values/defaults.xml
+index 32aa1c8..7d9498e 100644
+--- a/lineage-sdk/packages/LineageSettingsProvider/res/values/defaults.xml
++++ b/lineage-sdk/packages/LineageSettingsProvider/res/values/defaults.xml
+@@ -37,4 +37,7 @@
+     <integer name="def_force_show_navbar">0</integer>
+
++    <!-- Seed the taskbar preference on devices with dedicated navigation keys. -->
++    <bool name="def_start_with_taskbar_disabled">false</bool>
++
+     <!-- Default for LineageSettings.System.QS_QUICK_PULLDOWN
+          0. Off
+diff --git a/lineage-sdk/packages/LineageSettingsProvider/src/org/lineageos/lineagesettings/LineageDatabaseHelper.java b/lineage-sdk/packages/LineageSettingsProvider/src/org/lineageos/lineagesettings/LineageDatabaseHelper.java
+index ac19ea8..78feddd 100644
+--- a/lineage-sdk/packages/LineageSettingsProvider/src/org/lineageos/lineagesettings/LineageDatabaseHelper.java
++++ b/lineage-sdk/packages/LineageSettingsProvider/src/org/lineageos/lineagesettings/LineageDatabaseHelper.java
+@@ -421,4 +421,8 @@ public class LineageDatabaseHelper extends SQLiteOpenHelper{
+                     R.integer.def_force_show_navbar);
+
++            if (mContext.getResources().getBoolean(R.bool.def_start_with_taskbar_disabled)) {
++                loadSetting(stmt, LineageSettings.System.ENABLE_TASKBAR, 0);
++            }
++
+             loadIntegerSetting(stmt, LineageSettings.System.STATUS_BAR_QUICK_QS_PULLDOWN,
+                     R.integer.def_qs_quick_pulldown);

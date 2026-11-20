@@ -10,6 +10,7 @@ The repacker takes one exact retiredtab LineageOS 21 full OTA, modifies its SYST
 
 The script also removes the base ROM's oversized recovery image and its matching vendor installer. The tested installation used existing TWRP 3.7.0_9-0 for `klimtwifi`.
 
+- [Android 14 source build inputs and hardware-key navigation patch](docs/android14-source.md)
 - [Install and recover with TWRP](docs/install.md)
 - [Hardware validation, performance and known issues](docs/validation.md)
 

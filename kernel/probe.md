@@ -90,6 +90,8 @@ Start capturing the target's physical USB port before reboot. A new `0525:a4a7` 
 
 The SM-T700 trial rebooted at 20:34:42 PST on November 19. The monitor started in TWRP and ran for 185 seconds. The device disconnected after three seconds and the same port registered no new device for the remaining 182 seconds. The host journal also showed only the disconnect. No `ttyACM` appeared on the target port and zero report bytes were received. Neither a working USB gadget nor execution of the RAM init was demonstrated. These observations do not locate the failure relative to kernel entry.
 
+TWRP returned at 20:38:33 PST. Its previous-boot log contained recovery init messages and no ACM marker or 6.12.118 release. Before rollback the complete BOOT matched the fourth candidate plus preserved tail. The complete flushed BOOT matched the original Android 14 backup after restoration, and RECOVERY retained its original hash. Android's running vendor configuration disables standalone `CONFIG_USB_G_SERIAL` and enables Samsung's composite gadget. Vendor ADB verifies the cable and the vendor USB path. Mainline DWC3/ACM remains unverified. The restored Android 14 reached boot completion on Linux 3.4.113. For subsequent experiments on this unit the owner chose to keep diagnostic BOOT between trials, collect evidence in TWRP, and defer Android restoration until Linux bring-up succeeds.
+
 ## Build locally
 
 Use the source archive, NDK r28b and checked configuration specified in [the kernel build notes](README.md). Start with a fresh extraction of Linux 6.12.118. Run these commands from this directory, with `NDK_ROOT` set and the standard Linux kernel build tools installed.
