@@ -1,0 +1,16 @@
+dir /dev 0755 0 0
+nod /dev/console 0600 0 0 c 5 1
+dir /sys 0755 0 0
+dir /proc 0755 0 0
+dir /bin 0755 0 0
+dir /sbin 0755 0 0
+dir /system 0755 0 0
+dir /system/bin 0755 0 0
+dir /tmp 01777 0 0
+file /init ${EARLY_INIT} 0755 0 0
+file /bin/busybox ${BUSYBOX_ARM} 0755 0 0
+slink /sbin/sh /bin/busybox 0777 0 0
+slink /system/bin/sh /bin/busybox 0777 0 0
+file /sbin/adbd ${RECOVERY_ADBD} 0755 0 0
+file /early-adb.properties ${PROPERTY_AREA} 0444 0 0
+file /adb_keys ${AUTHORIZED_PUBKEY} 0444 0 0

@@ -1,0 +1,59 @@
+#!/bin/busybox sh
+# RAM-only SM-T700 diagnostic. The executable and key are supplied at build time.
+export PATH=/bin:/sbin
+set -eu
+/bin/busybox --install -s /bin
+mount -t devtmpfs devtmpfs /dev
+mount -t proc -o nosuid,nodev,noexec proc /proc
+mount -t sysfs -o nosuid,nodev,noexec sysfs /sys
+
+mark() {
+    printf '<3>KLIMT-EARLY1 %s\n' "$*" >/dev/kmsg
+}
+park() {
+    mark "$*"
+    while :; do sleep 3600; done
+}
+trap 'park "setup failed at line $LINENO"' EXIT
+mark "PID1 before USB $(uname -r)"
+mkdir -p /dev/pts /dev/usb-ffs/adb /config
+mount -t devpts -o gid=5,mode=620,ptmxmode=666 devpts /dev/pts
+# This legacy bionic property area is prebuilt with ro.adb.secure=1.
+test -s /adb_keys
+cp /early-adb.properties /dev/__properties__
+chmod 0444 /dev/__properties__
+mount -t configfs configfs /config
+g=/config/usb_gadget/klimt
+mkdir "$g"
+cd "$g"
+echo 0x18d1 >idVendor
+echo 0x4ee7 >idProduct
+mkdir strings/0x409 configs/c.1 functions/ffs.adb
+echo SMT700-EARLY >strings/0x409/serialnumber
+echo Samsung >strings/0x409/manufacturer
+echo 'SM-T700 RAM diagnostic' >strings/0x409/product
+ln -s "$g/functions/ffs.adb" configs/c.1/ffs.adb
+mount -t functionfs -o uid=2000,gid=2000 adb /dev/usb-ffs/adb
+test -e /dev/usb-ffs/adb/ep0
+/sbin/adbd --device_banner=recovery &
+daemon=$!
+mark "adbd started pid=$daemon"
+while [ "$(cat functions/ffs.adb/ready)" != 1 ]; do
+    kill -0 "$daemon" || park "adbd exited before FunctionFS ready"
+    sleep 0.1
+done
+mark "FunctionFS ready"
+while :; do
+    kill -0 "$daemon" || park "adbd exited before UDC bind"
+    for port in /sys/class/udc/*; do
+        [ -e "$port" ] || continue
+        case "$(readlink -f "$port")" in
+            */12000000.usb/*) printf '%s\n' "${port##*/}" >UDC; break 2 ;;
+        esac
+    done
+    sleep 0.1
+done
+mark "UDC bound"
+wait "$daemon" || :
+printf '\n' >UDC
+park "adbd exited"

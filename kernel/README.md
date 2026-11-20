@@ -27,6 +27,8 @@ The archived build's appended image was 5,920,125 bytes, within the SM-T700 BOOT
 
 The mainline board tree describes eMMC, SDIO Wi-Fi power sequencing and USB gadget support. Display panel support for the S6E3HA1, the Synaptics touch binding, Wi-Fi firmware/calibration, and Android binder and HAL integration remain open. The current configuration has binder and RMI4 core disabled. Keep the existing verified Android 14 BOOT image for normal use.
 
+The subsequent [early-ADB candidate](early-adb/README.md) preserves the kernel console for recovery readback and starts authenticated ADB from RAM. It has passed ARM emulation and is awaiting SM-T700 testing.
+
 ## Linux 7.3.1 comparison on the build host
 
 On November 19, 2026, upstream Linux 7.3.1 compiled for SM-T700 with the previous 6.12.118 ACM probe configuration migrated using `olddefconfig`, NDK r28b, the same RAM init and the same stock S-BOOT TLB patch. The ARM zImage measured 6,348,928 bytes. The disassembled decompressor contained the TLB invalidation immediately after the translation-table update. Both the upstream board DTB (54,157 bytes) and the single-port test DTB (54,181 bytes) matched the corresponding 6.12.118 outputs byte for byte. This build did not use the SM-T280 donor series. [Upstream 7.3.1 source](https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.3.1.tar.xz) · [SM-T700 board definition](https://github.com/gregkh/linux/blob/v7.3.1/arch/arm/boot/dts/samsung/exynos5420-klimt-wifi.dts)

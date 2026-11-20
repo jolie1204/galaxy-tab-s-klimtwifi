@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""Print the SM-T700 trial checkpoints present in a saved recovery console."""
+import argparse
+import re
+from pathlib import Path
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("previous_console", type=Path)
+args = parser.parse_args()
+log = args.previous_console.read_bytes()
+patterns = (
+    rb"Linux version 6\.12\.118-klimt-early1(?=[ (])",
+    rb"KLIMT-EARLY1 PID1 before USB 6\.12\.118-klimt-early1\b",
+    rb"KLIMT-EARLY1 adbd started pid=\d+",
+    rb"KLIMT-EARLY1 FunctionFS ready",
+    rb"KLIMT-EARLY1 UDC bound",
+)
+found = False
+for pattern in patterns:
+    match = re.search(pattern, log)
+    if match:
+        print(match[0].decode("ascii"))
+        found = True
+if not found:
+    print("No trial checkpoint found in this file.")
+    raise SystemExit(1)
