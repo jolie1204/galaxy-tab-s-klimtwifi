@@ -1,0 +1,35 @@
+diff --git a/hardware/samsung/audio/Android.mk b/hardware/samsung/audio/Android.mk
+index 813278d..c538066 100644
+--- a/hardware/samsung/audio/Android.mk
++++ b/hardware/samsung/audio/Android.mk
+@@ -30,2 +30,4 @@ LOCAL_SRC_FILES := \
+ # TODO: remove resampler if possible when AudioFlinger supports downsampling from 48 to 8
++LOCAL_C_INCLUDES += hardware/ril/include
++
+ LOCAL_SHARED_LIBRARIES := \
+diff --git a/hardware/samsung/ril/libsecril-client-sap/Android.mk b/hardware/samsung/ril/libsecril-client-sap/Android.mk
+index 0ee07f0..1a9e476 100755
+--- a/hardware/samsung/ril/libsecril-client-sap/Android.mk
++++ b/hardware/samsung/ril/libsecril-client-sap/Android.mk
+@@ -7,6 +7,8 @@ LOCAL_MODULE_TAGS := optional
+ LOCAL_SRC_FILES:= \
+     secril-client-sap.cpp
+
++LOCAL_C_INCLUDES += hardware/ril/include
++
+ LOCAL_SHARED_LIBRARIES := \
+     libutils \
+     libbinder \
+diff --git a/hardware/samsung/ril/libsecril-client/Android.mk b/hardware/samsung/ril/libsecril-client/Android.mk
+index 4c6b7f5..6d89bb1 100755
+--- a/hardware/samsung/ril/libsecril-client/Android.mk
++++ b/hardware/samsung/ril/libsecril-client/Android.mk
+@@ -6,6 +6,8 @@ include $(CLEAR_VARS)
+ LOCAL_SRC_FILES:= \
+     secril-client.cpp
+
++LOCAL_C_INCLUDES += hardware/ril/include
++
+ LOCAL_SHARED_LIBRARIES := \
+     libutils \
+     libbinder \
