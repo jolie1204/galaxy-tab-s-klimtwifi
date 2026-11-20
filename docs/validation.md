@@ -20,6 +20,10 @@ Wemo LAN discovery and control of a physical load were outside the installation 
 
 On November 19, a fresh host build from the published script passed ext4, ZIP CRC and whole-file signature checks. The BOOT payload, transfer list and updater matched the hardware-tested ZIP. The fresh output SHA-256 was `4f4898ea8334b3d51621aba5661834249a800b8b0c583872a62fff2416544c6c`. The hardware tests above used the earlier archived ZIP.
 
+## Clean setup after the kernel trials
+
+The November 19 TWRP factory reset retained the internal shared files (all regular-file hashes matched) and the unmounted microSD. BOOT and RECOVERY matched their original hashes. The original Android 14 Slim reached the Google welcome screen on Linux 3.4.113. Both setup flags were zero. Play Store and Play services remained installed, with no third-party user apps or accounts. Bluetooth reported ON. The same system_server process was present for over two minutes after boot completion, with no system-process fatal exception or out-of-memory entry in the crash buffer at the final check. Longer-term stability and the earlier restart cause remain unverified.
+
 ## Short performance samples before Google Apps
 
 USB connected, screen on and four online cores. Launch times are medians of five runs. Scrolling used 18 repeated swipes on the 60 Hz device.
