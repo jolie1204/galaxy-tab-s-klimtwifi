@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate two stackless ARMv7 probes for an SM-T700 diagnostic build."""
 import argparse
+import re
 import struct
 
 SIZE = 2 << 20
@@ -40,7 +41,7 @@ def parity(data):
     return bytes(remainder[-ECC:])
 
 
-def copy_words(offset, data):
+def copy_words(offset, data, clean):
     assert len(data) % 4 == 0 and offset + len(data) <= SIZE
     label = f".Lklimt_copy_{offset}_\\@"
     print(f"""    movw r2, #{offset & 0xffff}
@@ -48,18 +49,34 @@ def copy_words(offset, data):
     add r2, r0, r2
     mov r3, #{len(data) // 4}
 {label}:
-    ldr ip, [r1], #4
-    str ip, [r2], #4
-    subs r3, r3, #1
+    ldr ip, [r1], #4""")
+    if clean:
+        print("    str ip, [r2]\n    mcr p15, 0, r2, c7, c10, 1\n    add r2, r2, #4")
+    else:
+        print("    str ip, [r2], #4")
+    print(f"""    subs r3, r3, #1
     bne {label}""")
 
 
-def macro(name, message, base):
+def emit_record(message, clean=False):
     data = message.encode('ascii') + b'\n'
+    assert len(data) <= BLOCK
     header = struct.pack('<III', MAGIC, len(data), len(data))
     block = data.ljust(BLOCK, b'\0')
     segments = [(12, block), (FIRST_PARITY, parity(block)),
                 (SIZE - ECC, parity(header)), (0, header)]
+    print("    adr r1, .Lklimt_record\\@")
+    for offset, content in segments:
+        if offset == 0:
+            print("    dsb sy")
+        copy_words(offset, content, clean)
+    print("    dsb sy\n    b .Lklimt_done\\@\n    .balign 4\n.Lklimt_record\\@:")
+    for _, content in segments:
+        print("    .byte " + ", ".join(str(x) for x in content))
+    print(".Lklimt_done\\@:\n.endm")
+
+
+def macro(name, message, base):
     # r7/r8 hold the ARM boot arguments. Use only scratch registers.
     print(f""".macro {name}
     mrc p15, 0, r0, c1, c0, 0
@@ -71,23 +88,31 @@ def macro(name, message, base):
     movw r2, #{MAGIC & 0xffff}
     movt r2, #{MAGIC >> 16}
     cmp r1, r2
-    bne .Lklimt_done\\@
-    adr r1, .Lklimt_record\\@""")
-    for offset, content in segments:
-        if offset == 0:
-            print("    dsb sy")
-        copy_words(offset, content)
-    print("    dsb sy\n    b .Lklimt_done\\@\n    .balign 4\n.Lklimt_record\\@:")
-    for _, content in segments:
-        print("    .byte " + ", ".join(str(x) for x in content))
-    print(".Lklimt_done\\@:\n.endm")
+    bne .Lklimt_done\\@""")
+    emit_record(message)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--qemu-virt', action='store_true',
-                        help='use the reserved region in the separate ARM emulator test')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--qemu-virt', action='store_true',
+                      help='use the reserved region in the separate ARM emulator test')
+    mode.add_argument('--cached-vendor-run', metavar='HEX_ID',
+                      help='emit the cached vendor record for a 16-digit run ID')
+    mode.add_argument('--cached-612-run', metavar='HEX_ID',
+                      help='emit distinct cached entry and post-decompression records for Linux 6.12')
     args = parser.parse_args()
-    base = 0x4d000000 if args.qemu_virt else 0x40000000
-    macro('klimt_mark_entry', 'KLIMT-HEAD6 A decompressor entry', base)
-    macro('klimt_mark_inflated', 'KLIMT-HEAD6 B decompressed image', base)
+    run_id = args.cached_vendor_run if args.cached_vendor_run is not None else args.cached_612_run
+    if run_id is not None:
+        if not re.fullmatch(r'[0-9a-f]{16}', run_id):
+            parser.error('expected sixteen lowercase hexadecimal digits')
+        print(f".equ KLIMT_DATA_ECC, {FIRST_PARITY}\n.equ KLIMT_HEADER_ECC, {SIZE - ECC}")
+        print(".macro write_cached_record")
+        prefix = 'KLIMT-VENDOR-ENTRY ' if args.cached_vendor_run is not None else 'KLIMT-612-ENTRY '
+        emit_record(prefix + run_id, clean=True)
+        if args.cached_612_run is not None:
+            macro('klimt_mark_inflated', 'KLIMT-612-INFLATED ' + run_id, 0x40000000)
+    else:
+        base = 0x4d000000 if args.qemu_virt else 0x40000000
+        macro('klimt_mark_entry', 'KLIMT-HEAD6 A decompressor entry', base)
+        macro('klimt_mark_inflated', 'KLIMT-HEAD6 B decompressed image', base)

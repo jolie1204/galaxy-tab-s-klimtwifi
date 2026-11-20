@@ -1,0 +1,32 @@
+--- a/arch/arm/boot/compressed/head.S
++++ b/arch/arm/boot/compressed/head.S
+@@ -170 +170 @@
+-#include "guard9-marker.inc"
++#include "cached-record.inc"
+@@ -474,7 +474 @@
+-		mrc	p15, 0, r5, c1, c0, 0
+-		mov	r6, #0
+-		tst	r5, #5
+-		moveq	r0, #0x40000000
+-		ldreq	r6, [r0]
+-		mark_vendor
+-		bx	lr
++#include "cached-entry.inc"
+@@ -498 +492,13 @@
+-		ldr	r2, .Lguard_tail_offset
++		/* Keep the ring reserved and unclaimed until TWRP reads it.
++		 * Only change the matching descriptor after a successful marker. */
++		ldr	r0, [r3, #4]
++		cmp	r0, #1
++		bne	1f
++		ldr	r1, .Lcached_desc_offset
++		add	r1, r4, r1
++		ldr	r2, [r1]
++		ldr	r0, .Lcached_name_ptr
++		cmp	r2, r0
++		addeq	r2, r2, #1
++		streq	r2, [r1]
++1:		ldr	r2, .Lguard_tail_offset
+@@ -526,0 +533,2 @@
++.Lcached_desc_offset: .word 0x00c38658
++.Lcached_name_ptr: .word 0xc0ad1038
