@@ -1,0 +1,18 @@
+diff --git a/device/samsung/klimtwifi/BoardConfig.mk b/device/samsung/klimtwifi/BoardConfig.mk
+index fd60725..8f4c0b2 100644
+--- a/device/samsung/klimtwifi/BoardConfig.mk
++++ b/device/samsung/klimtwifi/BoardConfig.mk
+@@ -32,0 +33,3 @@ TARGET_KERNEL_VERSION := 6.12
++# Keep the external Android ramdisk clear of the expanded kernel and S-BOOT tables.
++BOARD_RECOVERY_MKBOOTIMG_ARGS := $(BOARD_MKBOOTIMG_ARGS) --ramdisk_offset 0x01000000
++BOARD_MKBOOTIMG_ARGS += --ramdisk_offset 0x08000000
+@@ -36 +39 @@ BOARD_BOOTIMAGE_PARTITION_SIZE := 8388608
+-BOARD_RECOVERYIMAGE_PARTITION_SIZE := 13485760
++BOARD_RECOVERYIMAGE_PARTITION_SIZE := 10485760
+diff --git a/hardware/samsung/mkbootimg.mk b/hardware/samsung/mkbootimg.mk
+index 3e3983c..154c9cb 100644
+--- a/hardware/samsung/mkbootimg.mk
++++ b/hardware/samsung/mkbootimg.mk
+@@ -81 +81 @@ $(INSTALLED_RECOVERYIMAGE_TARGET): $(MKBOOTIMG) $(recovery_ramdisk) $(recovery_k
+-	$(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(INTERNAL_MKBOOTIMG_VERSION_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $@
++	$(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(INTERNAL_MKBOOTIMG_VERSION_ARGS) $(if $(BOARD_RECOVERY_MKBOOTIMG_ARGS),$(BOARD_RECOVERY_MKBOOTIMG_ARGS),$(BOARD_MKBOOTIMG_ARGS)) --output $@
