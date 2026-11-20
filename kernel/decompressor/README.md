@@ -70,3 +70,18 @@ In Cortex-A15 emulation the wrapper took three paths: matching signature, mismat
 On the SM-T700 the host requested a normal reboot at 23:09:10 PST. Vendor PID 1 reported `ENTRY 00c5187f,00000000,20008000` at 3.80 seconds uptime. Both SCTLR.M and SCTLR.C were set. The signature field was a skipped-read sentinel, and the guard also skipped its write. The vendor previous console contained the TWRP seed and no entry marker. The decompressor ran at a pre-relocation base of `0x20008000` as observed by the executing code; this probe did not walk the bootloader's page tables to translate that address. TWRP returned automatically at 23:10:43 PST and yielded two matching console reads. The whole seventh BOOT and original RECOVERY hashes were verified after restoring BOOT.
 
 This explains the absent entry marker on the working vendor control. It does not locate the stopping point of the 6.12 trials. The measured vendor entry state differs from the documented ARM Linux handoff, which expects the MMU and data cache disabled. Comparing the first page-table and cache transition in the two decompressors is now a targeted 6.12 experiment. [ARM Linux boot protocol](https://docs.kernel.org/arch/arm/booting.html)
+
+## Replaying the tenth image at the vendor entry address
+
+After the [tenth hardware trial](../early-adb/README.md#tenth-sm-t700-hardware-trial), the host replayed the original vendor zImage and the kernel payload extracted from the exact tenth BOOT image. Both ran on a QEMU Cortex-A15 with RAM at the addresses used by the decompressor. A small loader set up an identity-mapped ARM section table at `0x26000000`, set SCTLR to the vendor control's measured `0x00c5187f` and entered each unchanged payload at `0x20008000`. The loader supplied synthetic ATAGs. The original S-BOOT translation table and the Exynos peripherals were outside the model.
+
+| Checkpoint in emulation | Original vendor 3.4 | Tenth 6.12.118 |
+| --- | --- | --- |
+| Return from first cache setup | PC `0x20008068` | PC `0x200080f8` |
+| Destination in r4 and new TTBR0 | `0x20008000`, `0x20004000` | `0x20008000`, `0x20004000` |
+| SCTLR and domain access control register after setup | `0x00c5587f`, `0xffffffff` | `0x00c5587d`, `0xfffffffd` |
+| Expanded kernel entry | Reached `0x20008000` with the UART FIFO enable bit preset; all 14,987,772 bytes matched the extracted vendor `Image` | Reached `0x20008000` with or without the FIFO bit; all 22,594,132 bytes matched the build's uncompressed `Image` |
+
+With zero-filled memory standing in for UART, the vendor image was still polling the FIFO reset bits at eight seconds. The guest PC and instruction words showed a loop reading `0x13820008` and testing mask `0x6`. A second control initialized just that mock word to `1` (FIFO already enabled) for both kernels. Both reached the expanded entry with their compressed payloads unchanged. The 6.12 image SHA-256 there was `6cd80b8d6a61aa6319304dc40965972640f0f05f34cf03f70beae820c907bcb6`.
+
+With this mapping, the measured entry SCTLR value permits 6.12 to reach its expanded instructions. The next hardware measurement that would distinguish the simulated handoff from the tablet's is the incoming translation configuration (TTBR0, TTBCR and domain access), plus actual translations of the executing image, appended DTB and prospective page-table area before replacing the bootloader table. The working vendor control provides a way to carry those measurements into recovery independently of the 6.12 USB stack.
