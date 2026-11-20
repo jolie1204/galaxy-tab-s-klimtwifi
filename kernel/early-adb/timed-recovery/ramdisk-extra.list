@@ -1,0 +1,4 @@
+nod /dev/null 0666 0 0 c 1 3
+nod /dev/kmsg 0600 0 0 c 1 11
+file /usb-init ${USB_SETUP_INIT} 0755 0 0
+file /sbin/restart-recovery ${RESTART_RECOVERY_ARM} 0755 0 0

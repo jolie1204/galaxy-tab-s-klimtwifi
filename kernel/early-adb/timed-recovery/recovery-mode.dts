@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/dts-v1/;
+/plugin/;
+
+&{/soc/system-controller@10040000} {
+    reboot-mode-inform2 {
+        compatible = "syscon-reboot-mode";
+        offset = <0x808>;
+        mode-recovery = <0x12345678>;
+    };
+
+    reboot-mode-inform3 {
+        compatible = "syscon-reboot-mode";
+        offset = <0x80c>;
+        mode-recovery = <0x12345674>;
+    };
+};

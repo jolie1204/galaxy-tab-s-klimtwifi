@@ -1,0 +1,43 @@
+#!/bin/busybox sh
+# PID 1 stays independent of USB setup, including its mounts and error paths.
+bb=/bin/busybox
+/bin/busybox sh /usb-init &
+remaining=120
+while [ "$remaining" -gt 0 ] && [ ! -f /tmp/request-recovery ]; do
+    "$bb" sleep 1
+    remaining=$((remaining - 1))
+done
+
+log() {
+    printf '<3>KLIMT-RETURN %s\n' "$*" >/dev/kmsg
+}
+if [ -f /tmp/request-recovery ]; then
+    log "authenticated shell requested recovery"
+else
+    log "USB trial deadline reached"
+fi
+# An ordinary reset could boot this same BOOT image again. Wait for both
+# recovery-mode callbacks to bind before issuing RESTART2("recovery").
+while :; do
+    [ -d /sys/bus/platform ] || "$bb" mount -t sysfs -o nosuid,nodev,noexec sysfs /sys
+    have_inform2=0
+    have_inform3=0
+    for node in /sys/bus/platform/drivers/syscon-reboot-mode/*/of_node; do
+        case "$("$bb" readlink "$node")" in
+            */reboot-mode-inform2) have_inform2=1 ;;
+            */reboot-mode-inform3) have_inform3=1 ;;
+        esac
+    done
+    if [ "$have_inform2" = 1 ] && [ "$have_inform3" = 1 ]; then
+        log "requesting recovery"
+        /sbin/restart-recovery
+        log "reboot syscall returned"
+        break
+    fi
+    if [ -z "${reported:-}" ]; then
+        log "waiting for recovery mode drivers"
+        reported=1
+    fi
+    "$bb" sleep 1
+done
+while :; do "$bb" sleep 3600; done

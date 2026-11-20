@@ -9,11 +9,17 @@ parser.add_argument("previous_console", type=Path)
 args = parser.parse_args()
 log = args.previous_console.read_bytes()
 patterns = (
-    rb"Linux version 6\.12\.118-klimt-early1(?=[ (])",
+    rb"Linux version 6\.12\.118-klimt-(?:early1|adbreturn1)(?=[ (])",
     rb"KLIMT-EARLY1 PID1 before USB 6\.12\.118-klimt-early1\b",
+    rb"KLIMT-EARLY1 USB setup pid=\d+ 6\.12\.118-klimt-adbreturn1\b",
     rb"KLIMT-EARLY1 adbd started pid=\d+",
     rb"KLIMT-EARLY1 FunctionFS ready",
     rb"KLIMT-EARLY1 UDC bound",
+    rb"KLIMT-RETURN authenticated shell requested recovery",
+    rb"KLIMT-RETURN USB trial deadline reached",
+    rb"KLIMT-RETURN waiting for recovery mode drivers",
+    rb"KLIMT-RETURN requesting recovery",
+    rb"KLIMT-RETURN reboot syscall returned",
 )
 found = False
 for pattern in patterns:

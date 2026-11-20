@@ -15,7 +15,11 @@ park() {
     while :; do sleep 3600; done
 }
 trap 'park "setup failed at line $LINENO"' EXIT
-mark "PID1 before USB $(uname -r)"
+if [ "$$" -eq 1 ]; then
+    mark "PID1 before USB $(uname -r)"
+else
+    mark "USB setup pid=$$ $(uname -r)"
+fi
 mkdir -p /dev/pts /dev/usb-ffs/adb /config
 mount -t devpts -o gid=5,mode=620,ptmxmode=666 devpts /dev/pts
 # This legacy bionic property area is prebuilt with ro.adb.secure=1.
