@@ -1,6 +1,6 @@
 # SM-T700 Linux 6.12 headless boot probe
 
-**Three hardware boot attempts on November 19, 2026.** This is a stand-alone Linux diagnostic for `klimtwifi`, with no Android userspace. The embedded init mounts procfs and sysfs and attempts to bring up USB Ethernet. It does not mount the tablet's eMMC partitions.
+**Four hardware boot attempts on November 19, 2026.** This is a stand-alone Linux diagnostic for `klimtwifi`, with no Android userspace. The embedded init mounts procfs and sysfs and attempts to bring up USB Ethernet. It does not mount the tablet's eMMC partitions.
 
 ## Recovery and boot-loader constraints
 
@@ -52,6 +52,43 @@ Before writing BOOT, TWRP ran the same SD executable with `--control` while the 
 The 6,498,320-byte container passed payload comparisons and full BOOT read-back. Its SHA-256 was `f186943352029ee9ef55543426958e91b84ed8ce195a980e39960fab5e27e591`. RECOVERY matched its original whole-partition hash. One normal boot was requested at 20:13:58 PST. USB disconnected two seconds into the 185-second observation. No new USB device appeared during the remaining 183 seconds. At 20:17:33 PST, TWRP mounted the card read-only. Both the run ID and control record matched their host copies byte for byte. The run directory contained no `result.txt`. Recovery's previous-boot log included recovery init messages and contained no 6.12.118 version or probe marker. This trial produced no evidence of Linux 6.12.118 reaching the SD writer. The observations leave kernel entry, early init failure and SD driver or filesystem readiness unresolved.
 
 TWRP restored the pre-trial Android 14 BOOT. The complete 8 MiB post-flush read-back matched the backup, and RECOVERY retained its original hash. Android also read the matching control and confirmed that the SD result was absent. The restored Android 14 system reported the 3.4.113 Deathly kernel. During startup the Android framework restarted twice with system_server memory errors, once while parceling package information and once while reporting Wi-Fi scan results. At 20:20:23 PST the replacement process was running with setup complete, a validated Wi-Fi connection, Bluetooth ON, and Play Store, Play services and Wemo Controller 4.4.0 installed. The underlying cause remains unresolved.
+
+## Fourth trial with USB CDC ACM
+
+On a separate SM-T280, a Spreadtrum SC7730-family Linux 7.3.1 RAM diagnostic first enumerated as a USB CDC ACM gadget but produced no text. After the initramfs mounted devtmpfs on `/dev` with device nodes usable, the host received the kernel release and a read-only eMMC report. That project then tested SMP and peripherals individually before moving to Android services. Its Android 14 work reached PackageManager and graphics milestones. The stock ADB switch still had a missing userspace dependency at its last recorded checkpoint.
+
+This SM-T700 experiment adopts the two-stage USB measurement over a standard data cable. It keeps Linux 6.12.118, the Exynos platform code, the SM-T700 DT and the S-BOOT TLB change. The running vendor kernel identified `exynos-ss-udc.0` under `exynos-dwc3.0` as its USB device controller. The upstream board describes two peripheral DWC3 instances. A trial-only [DT overlay](klimt-acm-port.dts) disables instance 1 to avoid binding the gadget there. This selection remains a hardware hypothesis.
+
+The build uses `CONFIG_USB_G_SERIAL=y` in its default CDC ACM mode, disables `CONFIG_USB_ETH` and forces `maxcpus=1 rdinit=/init ro loglevel=7` for this diagnostic. The [RAM init](acm_probe.c) mounts devtmpfs without `MS_NODEV` and mounts sysfs. Every two seconds it attempts to send its marker, the running kernel release, the machine and online CPU list on `/dev/ttyGS0`. The diagnostic mounts no eMMC or SD filesystem.
+
+### Reproducing the candidate
+
+Start from the patched source and isolated output tree in **Build locally** below. Compile `acm_probe.c` in place of `probe_init.c` with the same static ARM compiler options. Point the initramfs list's `file /init` at that executable. Before `olddefconfig` and the kernel build, apply these settings:
+
+```bash
+boot_args='maxcpus=1 rdinit=/init ro loglevel=7'
+"$kernel_src/scripts/config" --file "$kernel_out/.config" \
+  --disable USB_ETH --enable USB_G_SERIAL \
+  --disable CMDLINE_FROM_BOOTLOADER --enable CMDLINE_FORCE \
+  --set-str CMDLINE "$boot_args" --disable LOCALVERSION_AUTO \
+  --set-str LOCALVERSION '-klimt-acm1'
+```
+
+After the kernel and board DTB build, apply the overlay before appending the DTB:
+
+```bash
+"$kernel_out/scripts/dtc/dtc" -I dts -O dtb -o "$kernel_out/acm.dtbo" klimt-acm-port.dts
+"$kernel_out/scripts/dtc/fdtoverlay" \
+  -i "$kernel_out/arch/arm/boot/dts/samsung/exynos5420-klimt-wifi.dtb" \
+  -o "$kernel_out/klimt-acm.dtb" "$kernel_out/acm.dtbo"
+cat "$kernel_out/arch/arm/boot/zImage" "$kernel_out/klimt-acm.dtb" > "$kernel_out/zImage-klimtwifi-probe-dtb"
+```
+
+Use the **Second hardware trial** container procedure with the new kernel, command line and initramfs, the 64 MiB ramdisk offset and the aligned Samsung trailer. The tested file was 6,209,552 bytes with SHA-256 `51e74ddf1dcbc176dac11105ac77634673146ad8ad01ae8076857a48754525cd`. Host checks compared the unpacked payloads, extracted init binary, compressed embedded archive, selected controller and expected kernel release.
+
+Start capturing the target's physical USB port before reboot. A new `0525:a4a7` device on that port is the first checkpoint. Open its own newly attached `ttyACM` node. The second checkpoint requires the actual `SM-T700 ACM RAM INIT READY` report and `release=6.12.118-klimt-acm1`. Enumeration alone cannot establish PID 1 execution.
+
+The SM-T700 trial rebooted at 20:34:42 PST on November 19. The monitor started in TWRP and ran for 185 seconds. The device disconnected after three seconds and the same port registered no new device for the remaining 182 seconds. The host journal also showed only the disconnect. No `ttyACM` appeared on the target port and zero report bytes were received. Neither a working USB gadget nor execution of the RAM init was demonstrated. These observations do not locate the failure relative to kernel entry.
 
 ## Build locally
 
