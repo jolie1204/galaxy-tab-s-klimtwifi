@@ -1,0 +1,53 @@
+diff --git a/hardware/samsung_slsi/exynos/libfimg4x/FimgExynos5.cpp b/hardware/samsung_slsi/exynos/libfimg4x/FimgExynos5.cpp
+index ea03e56..d173d1f 100644
+--- a/hardware/samsung_slsi/exynos/libfimg4x/FimgExynos5.cpp
++++ b/hardware/samsung_slsi/exynos/libfimg4x/FimgExynos5.cpp
+@@ -51,33 +51,24 @@ FimgV4x::~FimgV4x()
+
+ FimgApi *FimgV4x::CreateInstance()
+ {
+-    FimgApi *ptrFimg = NULL;
+-
+-    for(int i = m_curFimgV4xIndex; i < NUMBER_FIMG_LIST; i++) {
+-        if (m_ptrFimgApiList[i] == NULL)
+-            m_ptrFimgApiList[i] = new FimgV4x;
+-
+-        if (m_ptrFimgApiList[i]->FlagCreate() == false) {
+-            if (m_ptrFimgApiList[i]->Create() == false) {
+-                PRINT("%s::Create(%d) fail\n", __func__, i);
+-                goto CreateInstance_End;
+-            }
+-            else
+-                m_numOfInstance++;
++    const unsigned index = m_curFimgV4xIndex;
++    if (index >= NUMBER_FIMG_LIST)
++        return NULL;
++
++    FimgApi *&instance = m_ptrFimgApiList[index];
++    if (instance == NULL)
++        instance = new FimgV4x;
++
++    if (!instance->FlagCreate()) {
++        if (!instance->Create()) {
++            PRINT("%s::Create(%u) fail\n", __func__, index);
++            return NULL;
+         }
+-
+-        if (i < NUMBER_FIMG_LIST - 1)
+-            m_curFimgV4xIndex = i + 1;
+-        else
+-            m_curFimgV4xIndex = 0;
+-
+-        ptrFimg = m_ptrFimgApiList[i];
+-        goto CreateInstance_End;
++        ++m_numOfInstance;
+     }
+
+-CreateInstance_End :
+-
+-    return ptrFimg;
++    m_curFimgV4xIndex = (index + 1) % NUMBER_FIMG_LIST;
++    return instance;
+ }
+
+ void FimgV4x::DestroyInstance(FimgApi * ptrFimgApi)
