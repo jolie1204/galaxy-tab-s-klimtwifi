@@ -1,0 +1,42 @@
+diff --git a/vendor/lineage/config/common.mk b/vendor/lineage/config/common.mk
+index 9bb749e..6dcce43 100644
+--- a/vendor/lineage/config/common.mk
++++ b/vendor/lineage/config/common.mk
+@@ -122,9 +122,10 @@ PRODUCT_PACKAGES += \
+
+ # Lineage packages
+ ifeq ($(PRODUCT_IS_ATV),)
+-PRODUCT_PACKAGES += \
+-    ExactCalculator \
+-    Jelly
++PRODUCT_PACKAGES += Jelly
++ifneq ($(TARGET_PRODUCT),lineage_klimtwifi)
++PRODUCT_PACKAGES += ExactCalculator
++endif
+ endif
+
+ ifeq ($(PRODUCT_IS_AUTOMOTIVE),)
+diff --git a/vendor/lineage/config/common_mobile_full.mk b/vendor/lineage/config/common_mobile_full.mk
+index 84d800c..c614654 100644
+--- a/vendor/lineage/config/common_mobile_full.mk
++++ b/vendor/lineage/config/common_mobile_full.mk
+@@ -9,12 +9,16 @@ $(call inherit-product-if-exists, external/google-fonts/rubik/fonts.mk)
+
+ # Apps
+ PRODUCT_PACKAGES += \
+-    Eleven \
+-    Etar \
+     Profiles \
+-    Recorder \
+     Seedvault
+
++ifneq ($(TARGET_PRODUCT),lineage_klimtwifi)
++PRODUCT_PACKAGES += \
++    Eleven \
++    Etar \
++    Recorder
++endif
++
+ ifneq ($(PRODUCT_NO_CAMERA),true)
+ PRODUCT_PACKAGES += \
+     Aperture
