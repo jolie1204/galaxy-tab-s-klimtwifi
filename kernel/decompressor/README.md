@@ -23,4 +23,4 @@ TWRP verified a marker-free baseline console, the fifth-trial BOOT and the origi
 
 At 22:00:24 PST the tablet rebooted normally from TWRP. The host saw the recovery USB device detach 1.7 seconds into a 185-second capture. The same physical port registered no device for the remaining 183 seconds. No ADB shell was observed.
 
-TWRP had not reconnected by 22:05:30 PST. The diagnostic remains in BOOT. Hardware checkpoint readback requires a warm return to the existing recovery and an immediate capture of /proc/last_kmsg. The current observation establishes neither decompressor entry nor completion.
+TWRP reconnected at 22:15:41 PST. Two reads of the 6,740-byte previous console matched byte for byte. It contained recovery init messages, a reboot at about 535 seconds uptime, and a footer reporting 100 corrected bytes and zero unrecoverable blocks. Neither marker nor the trial kernel release was present. The complete BOOT and RECOVERY reads still matched their expected hashes. The running TWRP listed ram0 as an enabled console. This completes the sixth trial's readback. Whether the bootloader entered the 6.12 decompressor remains unresolved.
