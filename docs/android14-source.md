@@ -20,6 +20,20 @@ An ARMv7/API 34 compile compared Android's Bionic header with the exported Linux
 
 **Slim product.** Apply the [package selection patch](../android14/klimtwifi-slim-apps.patch) from the Android source root with `patch -p1`. GNU Make evaluation of the two changed Lineage product files removed exactly ExactCalculator, Eleven, Etar and Recorder for `lineage_klimtwifi`. The equivalent comparison for `lineage_chagallwifi` produced an identical package set before and after the patch. CalendarProvider is separately requested in the Android handheld system configuration. Final package inventory and Google Play installation still need checking on the source-built product. The device-specific taskbar patch below was also applied in this checkout. AAPT2 34.0.0 compiled and linked the provider resources with the taskbar opt-out flag false for the base and true with the device overlay.
 
+### Selecting the 6.12 payload in the Android build
+
+From the Android checkout root, apply [the BOOT and header selection patch](../android14/klimtwifi-prebuilt-linux612.patch) with `patch -p1`. Put the previously built ARM zImage followed by the SM-T700 DTB in the device prebuilt directory:
+
+```bash
+mkdir -p device/samsung/klimtwifi-kernel
+cat "$kernel_out/arch/arm/boot/zImage" \
+    "$kernel_out/arch/arm/boot/dts/samsung/exynos5420-klimt-wifi.dtb" \
+    > device/samsung/klimtwifi-kernel/zImage-dtb
+sha256sum device/samsung/klimtwifi-kernel/zImage-dtb
+```
+
+The November 20 payload is 6,379,141 bytes, SHA-256 `20992d894f626e8849ca4d462a6a7cbe4ff74038f1754cd072f6cf69a51526e5`. With the downstream Samsung source both present and absent, a Make check of the patched board and Lineage kernel rules selected this file, set `FULL_KERNEL_BUILD=false` and copied identical bytes. The device opts into Lineage's generated header substitution for legacy Make HALs. A comparison checked that both the existing inline-build path and the new device option resolve those dependencies to `generated_kernel_headers`. A standalone ARM `headers_install` exported 668 headers from Samsung revision `ece5708530bb80a85b26edeee568733b14740239`. The subsequent platform build targets `lineage_klimtwifi`, release `ap2a`, variant `userdebug` and the `systemimage bootimage` goals. Inspect the kernel payload in the completed BOOT before any hardware test.
+
 ## Hardware keys and tablet taskbar
 
 The installed key layouts map code 172 to HOME, 158 to BACK and 254 to APP_SWITCH. The kernel advertises the home key through gpio-keys and the last two through sec_touchkey. The resolved framework resource config_showNavigationBar was false and Lineage force_show_navbar was 0. Window Manager identified a separate bottom Taskbar owned by com.android.launcher3. There was no stored Lineage enable_taskbar preference. The inspected Trebuchet code defaults this preference to enabled on tablets. The awake welcome-screen accessibility hierarchy showed only SetupWizard. Testing the exact visible buttons and physical key actions in the launcher and apps is still pending. [Device key layout](https://github.com/retiredtab/android_device_samsung_klimt-common/blob/bf398b984517260fd5d95ff203d209e34bb8887f/configs/keylayout/sec_touchkey.kl) · [Trebuchet tablet default](https://github.com/LineageOS/android_packages_apps_Trebuchet/blob/08002b5483685be3457908456afb42277eed4e08/src/com/android/launcher3/DeviceProfile.java#L353)

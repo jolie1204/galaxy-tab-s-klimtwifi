@@ -1,0 +1,32 @@
+diff --git a/build/make/core/binary.mk b/build/make/core/binary.mk
+index 511452c..bef2c1c 100644
+--- a/build/make/core/binary.mk
++++ b/build/make/core/binary.mk
+@@ -45,8 +45,8 @@ endif
+ my_soong_problems :=
+
+ # Automatically replace the old-style kernel header include with a dependency
+-# on the generated_kernel_headers header library when building inline
+-ifeq ($(INLINE_KERNEL_BUILDING),true)
++# on the generated_kernel_headers header library when the board uses it.
++ifneq ($(filter true,$(INLINE_KERNEL_BUILDING) $(TARGET_USE_GENERATED_KERNEL_HEADERS)),)
+ ifneq (,$(findstring $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include,$(LOCAL_C_INCLUDES)))
+   LOCAL_C_INCLUDES := $(patsubst $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include,,$(LOCAL_C_INCLUDES))
+   LOCAL_HEADER_LIBRARIES += generated_kernel_headers
+diff --git a/device/samsung/klimtwifi/BoardConfig.mk b/device/samsung/klimtwifi/BoardConfig.mk
+index b19486e..fd60725 100644
+--- a/device/samsung/klimtwifi/BoardConfig.mk
++++ b/device/samsung/klimtwifi/BoardConfig.mk
+@@ -24,6 +24,12 @@ TARGET_OTA_ASSERT_DEVICE := klimtwifi,klimtltecan,klimtlte,
+
+ # Kernel
+ TARGET_KERNEL_CONFIG := lineageos_klimtwifi_defconfig
++# Exynos HALs still consume the Samsung userspace headers.
++# Package the separately built Linux 6.12 ARM kernel and appended device tree.
++TARGET_USE_GENERATED_KERNEL_HEADERS := true
++TARGET_FORCE_PREBUILT_KERNEL := true
++TARGET_PREBUILT_KERNEL := device/samsung/klimtwifi-kernel/zImage-dtb
++TARGET_KERNEL_VERSION := 6.12
+
+ # Partitions
+ BOARD_BOOTIMAGE_PARTITION_SIZE := 8388608
