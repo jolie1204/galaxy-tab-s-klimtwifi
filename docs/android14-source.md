@@ -40,6 +40,22 @@ The complete checkout synced 1,471 projects. The manifest pinned each project to
 
 The full graph selected the prebuilt payload for BOOT and produced Samsung kernel headers for the HAL build. During Java compilation, the Lineage SDK implemented a two-argument pre-switch callback while the platform expected one argument. The [user-switch observer patch](../android14/lineage-user-switch-observer.patch) uses the framework's `UserSwitchObserver` adapter and keeps the settings refresh in `onUserSwitchComplete`. The framework handles the switch acknowledgement. The previously failing `org.lineageos.platform` Java target then produced a 362,129-byte JAR and the image build resumed with the existing intermediate files.
 
+The checked-out Trebuchet and IntentResolver also require framework APIs added after the April 2025 UL framework revision. These include the launcher's image-decoding limits, the Home key call to SystemUI and intent resolution with an explicit MIME type. To keep the current clients and the Exynos compatibility changes, the build incorporates the official LineageOS 21 framework update onto the UL tree. Comparing the UL revision with its Lineage merge parent identified 29 files changed for UL. Applying that delta to the newer Lineage tree independently produced the same tree hash as applying the Lineage update to UL. [UL merge](https://github.com/LineageOS-UL/android_frameworks_base/commit/aca8bb27401d94ac4521043e13f414e19f51bd3c) · [Pinned upstream framework](https://github.com/LineageOS/android_frameworks_base/commit/631771503aae14fe05f40bc0e4b850548bc39aa5)
+
+Run this from a freshly synced `frameworks/base` for the pinned UL revision. The last check verifies all tracked framework content, including the UL changes.
+
+```bash
+set -eo pipefail
+test "$(git rev-parse HEAD)" = aca8bb27401d94ac4521043e13f414e19f51bd3c
+parent=cf4daf150e0066abdaeffa6dd5bba6f7ebce2b42
+upstream=631771503aae14fe05f40bc0e4b850548bc39aa5
+git fetch --no-tags --depth=1 https://github.com/LineageOS/android_frameworks_base.git "$parent" "$upstream"
+git diff --binary "$parent" "$upstream" | git apply --3way --whitespace=nowarn
+test "$(git write-tree)" = 664dd37bc5a4a01affb0bd7811be981bdcc7caae
+```
+
+With this framework, the previously failing `IntentResolver-core` and `Launcher3QuickStepLib` Java targets produced JARs of 5,367,370 and 15,300,266 bytes respectively. Hardware Home, Recents and share-sheet behavior still require device testing.
+
 ## Hardware keys and tablet taskbar
 
 The installed key layouts map code 172 to HOME, 158 to BACK and 254 to APP_SWITCH. The kernel advertises the home key through gpio-keys and the last two through sec_touchkey. The resolved framework resource config_showNavigationBar was false and Lineage force_show_navbar was 0. Window Manager identified a separate bottom Taskbar owned by com.android.launcher3. There was no stored Lineage enable_taskbar preference. The inspected Trebuchet code defaults this preference to enabled on tablets. The awake welcome-screen accessibility hierarchy showed only SetupWizard. Testing the exact visible buttons and physical key actions in the launcher and apps is still pending. [Device key layout](https://github.com/retiredtab/android_device_samsung_klimt-common/blob/bf398b984517260fd5d95ff203d209e34bb8887f/configs/keylayout/sec_touchkey.kl) · [Trebuchet tablet default](https://github.com/LineageOS/android_packages_apps_Trebuchet/blob/08002b5483685be3457908456afb42277eed4e08/src/com/android/launcher3/DeviceProfile.java#L353)
