@@ -1,6 +1,6 @@
 # SM-T700 Linux 6.12 headless boot probe
 
-**Two hardware boot attempts on November 19, 2026.** This is a stand-alone Linux diagnostic for `klimtwifi`, with no Android userspace. The embedded init mounts procfs and sysfs and attempts to bring up USB Ethernet. It does not mount the tablet's eMMC partitions.
+**Three hardware boot attempts on November 19, 2026.** This is a stand-alone Linux diagnostic for `klimtwifi`, with no Android userspace. The embedded init mounts procfs and sysfs and attempts to bring up USB Ethernet. It does not mount the tablet's eMMC partitions.
 
 ## Recovery and boot-loader constraints
 
@@ -40,6 +40,16 @@ The host requested a normal reboot at 13:10:14 PST. It monitored the tablet's ph
 TWRP 3.7.0_9-0 exposed a 6,859-byte previous-boot log containing recovery init messages. It contained neither the Linux 6.12.118 version nor the diagnostic init marker. TWRP verified the full second-trial BOOT hash, then restored the 8 MiB Android 14 BOOT backup. The complete post-flush read-back matched the backup, and the separate RECOVERY partition retained its original hash.
 
 Android 14 Slim reported boot complete at 19:29:39 PST on Linux `3.4.113-Deathly-1.0+`. By 19:30:08 PST Android reported a validated default Wi-Fi connection, Bluetooth ON and setup complete. Package Manager found Play Store, Play services and Wemo Controller 4.4.0. The same system_server process was present two minutes after boot completion, and the crash buffer contained no fatal system-process exception at that check.
+
+## Third hardware trial with a microSD record
+
+This variant retains the USB diagnostic and adds a separate way to prove that Linux 6.12.118 reached userspace. Android created one fresh `K612-<run-id>` directory on the existing public FAT volume. Its `run-id` file contains a random 32-character hex string followed by a newline. The SD writer accepts only an MMC device whose sysfs type is `SD` and whose partition 1 start and length match the prepared card in 512-byte sectors. It mounts that partition read-only first and checks the run ID before a writable remount. It creates its output exclusively, writes the actual uname, fsyncs and unmounts. It never selects an MMC device whose type is `MMC`.
+
+For this variant, generate a private `sd_run.h` with quoted string values for `RUN_ID`, `PART_START` and `PART_SECTORS`. Read the sectors from the verified external partition's sysfs `start` and `size`. Build [sd_probe.c](sd_probe.c) with the same static ARM compiler options as the USB init below and add the private header directory with `-I`. In the initramfs list install the SD executable at `/init`, the original USB init at `/usb-init`, and add `dir /tmp 0700 0 0`. Build both the embedded and external initramfs from that list and package as in the second trial.
+
+Before writing BOOT, TWRP ran the same SD executable with `--control` while the card was unmounted. It created `control.txt` with the run ID and TWRP's actual kernel release. A read-only remount verified the file. A second control invocation refused to overwrite it, and a mismatched run was rejected. `result.txt` was absent before reboot. The live diagnostic can create that file only when its kernel reports `6.12.118`. A complete matching result establishes userspace execution. An absent result leaves both early boot and SD initialization open.
+
+The 6,498,320-byte container passed payload comparisons and full BOOT read-back. Its SHA-256 was `f186943352029ee9ef55543426958e91b84ed8ce195a980e39960fab5e27e591`. RECOVERY matched its original whole-partition hash. One normal boot was requested at 20:13:58 PST. USB disconnected two seconds into the 185-second observation. No new USB device appeared during the remaining 183 seconds. The SD result requires a separate read-back.
 
 ## Build locally
 
