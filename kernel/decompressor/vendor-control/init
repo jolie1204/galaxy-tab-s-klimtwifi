@@ -1,0 +1,19 @@
+#!/bin/busybox sh
+bb=/bin/busybox
+read -r trial < /run-id
+log() {
+    echo "<0>KLIMT-VENDOR $trial $*" > /dev/kmsg
+}
+log "PID1 kernel=$($bb uname -r)"
+if $bb mount -t proc -o nodev,nosuid,noexec proc /proc && $bb cat /proc/last_kmsg > /old-console; then
+    if $bb grep -Fxq "KLIMT-VENDOR-ENTRY $trial" /old-console; then early=present; else early=absent; fi
+    if $bb grep -Fq "KLIMT-VENDOR-SEED $trial" /old-console; then seed=present; else seed=absent; fi
+    log "READBACK early=$early seed=$seed bytes=$($bb wc -c < /old-console)"
+else
+    log "READBACK unavailable"
+fi
+log "returning to recovery"
+$bb sleep 3
+/bin/restart-recovery
+log "recovery reboot syscall returned"
+while :; do $bb sleep 60; done
