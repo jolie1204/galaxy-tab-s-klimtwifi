@@ -1,0 +1,11 @@
+--- a/arch/arm/boot/compressed/head.S
++++ b/arch/arm/boot/compressed/head.S
+@@ -169,0 +170 @@
++		bl	.Lmap_sample
+@@ -180,0 +182 @@
++		bl	.Lmap_commit
+@@ -461,0 +464 @@
++		bl	.Lmap_report
+@@ -466,0 +470,2 @@
++
++#include "entry-map.inc"
