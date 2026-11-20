@@ -154,3 +154,21 @@ Four Cortex-A15 replays sampled the retained region at all four stages. They cov
 TWRP 3.7.0_9-0 backed up the complete preceding BOOT. After the new image was written and flushed, all 8 MiB read back with SHA-256 `42e4983d917cb3bf7a822df46cf12f95c52f3d6f97336273f6a10d0a179dcd50`. RECOVERY matched its original digest. A single normal boot was requested at 13:49:30 PST on November 20, 2026. The original physical USB port detached in the same second.
 
 The 210-second window ended at 13:53:00 PST. Both the physical-port monitor and the USB kernel journal saw only the initial disconnect. No diagnostic ADB shell or new TWRP boot appeared during this interval. Manual TWRP entry was requested for the retained-console readback.
+
+### Offline review of the two November 20 BOOT images
+
+The Android 14 source build and the fourteenth diagnostic contain different ARM decompressors. Reading the packaged kernel bytes at offset 0x540 showed TTBR0 write, DACR write, TTBCR write in the Android BOOT. The diagnostic contains TTBR0 write, TLB invalidate, DACR write at the same offset. The upstream board source documents the need to invalidate after the table switch on stock S-BOOT. Carry the [existing patch](../armv7-sboot-tlb.patch) into the Android kernel and verify the instruction in the rebuilt BOOT. The diagnostic already includes it. [Upstream board note](https://github.com/gregkh/linux/blob/v6.12.118/arch/arm/boot/dts/samsung/exynos5420-galaxy-tab-common.dtsi#L18-L27)
+
+The physical vendor control measured kernel entry at 0x20008000 and TTBR0 at 0x240cc000. It did not record the physical initrd address. The following Cortex-A15 replays extracted both payloads from each BOOT, placed the kernel at that observed entry address and supplied synthetic boot tags and page tables. The 16 and 64 MiB placements assume S-BOOT translates the ramdisk header address by the same 0x10000000 delta as the vendor kernel. The 128 MiB placement is a host control. Addresses below are physical, with the end excluded.
+
+| Image and modeled ramdisk start | Result at expanded kernel entry |
+| --- | --- |
+| Android, 0x21000000 (16 MiB) | The expanded kernel occupied 0x20008000–0x217a4aa8. The entire 1,382,400-byte ramdisk range contained kernel output. XZ decoding failed. |
+| Android, 0x28000000 (128 MiB) | The ramdisk was byte-identical to the packaged XZ archive and decoded successfully. |
+| Diagnostic, 0x24000000 (64 MiB) | The range ended at 0x2410f7bb and encompassed the entire 16 KiB first-level table at 0x240cc000. Modeling an intact table in that region changed 16,318 ramdisk bytes. Gzip decoding failed. INFLATED was retained. |
+| Diagnostic, 0x28000000 (128 MiB) | The packaged ramdisk survived byte for byte and decoded. INFLATED was retained. |
+| Diagnostic, same 128 MiB placement, no ATAG_INITRD2 | The ramdisk survived and INFLATED was retained. The handed-off DTB contained neither initrd address property. |
+
+| Diagnostic control, same 128 MiB placement, only appended DTB magic cleared | The decompressor passed the original boot-tag pointer in r2 and retained INFLATED. |
+
+All six runs reached expanded entry with a byte-for-byte match against the corresponding full Image. The four runs with both an intact DTB and an initrd tag also delivered the expected start and end in /chosen. Each diagnostic case still reached INFLATED, including the two cases where early userspace would lack an intact or discoverable ramdisk. Those outcomes support checking the ramdisk handoff when diagnosing absent ADB. The physical fourteenth trial's last retained stage and ramdisk placement are still needed to locate its stall. The next discriminating read is the actual ATAG_INITRD2 bounds on a working vendor boot with the same header offset, or equivalent direct loader evidence. If the physical trial returns PRECACHE, examine the table switch and postcache writer eligibility first. If it returns POSTCACHE, examine relocation, decompression and the cache shutdown before pursuing userspace. [ATAG conversion](https://github.com/gregkh/linux/blob/v6.12.118/arch/arm/boot/compressed/atags_to_fdt.c) · [ARM boot protocol](https://docs.kernel.org/arch/arm/booting.html)

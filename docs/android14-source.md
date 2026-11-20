@@ -2,6 +2,8 @@
 
 The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linux 3.4.113 is the hardware reference from the published October 7 ROM. The existing Slim ZIP repacks that ROM. The November 20 source build produced Android 14 SYSTEM and BOOT images using the 6.12.118 kernel. Both passed host inspection. This image pair has not been installed or booted on the tablet.
 
+A subsequent audit found that the archived Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
+
 ## Verified image pair, November 20, 2026
 
 The `systemimage bootimage` build completed at 13:33 PST for `lineage_klimtwifi-ap2a-userdebug`, Android 14 / API 34, build ID `AP2A.240905.003`. No device write was performed. The separately instrumented 6.12 kernel reached its decompressor entry in an earlier hardware test. Boot of this Android image, ADB, physical navigation, graphics, Bluetooth operation and memory behavior still require hardware testing. [Image SHA-256 checksums](../checksums/android14-linux612-20261120.sha256) · [Hardware checkpoint](../kernel/decompressor/README.md#thirteenth-trial-with-both-linux-612-decompressor-checkpoints)
