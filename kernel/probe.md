@@ -33,7 +33,13 @@ To produce this variant after the build below, keep the same kernel, command lin
 
 The hardware candidate was 6,211,600 bytes (SHA-256 `d6541d0a85a564aa0c427209c608726d2b0f01c5b7e541fd7c0a7efc96d30f7d`). TWRP verified the original Android BOOT and separate RECOVERY. After writing the candidate, flushing and reading the entire 8 MiB BOOT, its hash matched the expected candidate plus preserved tail. RECOVERY still matched its original hash.
 
-The host requested a normal reboot at 13:10:14 PST. It monitored the tablet's physical USB port before reboot through 13:13:19 PST. TWRP disconnected after three seconds. The port stayed empty for the remaining 182 seconds, and the host kernel journal contained only the disconnect. There was no USB interface for the ping test. No UART or screen observation was available. Linux 6.12.118 kernel entry and embedded init execution remain unconfirmed. At the close of this observation the second probe occupied BOOT, pending physical return to TWRP for Android restoration.
+The host requested a normal reboot at 13:10:14 PST. It monitored the tablet's physical USB port before reboot through 13:13:19 PST. TWRP disconnected after three seconds. The port stayed empty for the remaining 182 seconds, and the host kernel journal contained only the disconnect. There was no USB interface for the ping test. No UART or screen observation was available. Linux 6.12.118 kernel entry and embedded init execution remain unconfirmed. The owner subsequently reported a downloader screen and later returned the device to TWRP.
+
+### Recovery after the second trial
+
+TWRP 3.7.0_9-0 exposed a 6,859-byte previous-boot log containing recovery init messages. It contained neither the Linux 6.12.118 version nor the diagnostic init marker. TWRP verified the full second-trial BOOT hash, then restored the 8 MiB Android 14 BOOT backup. The complete post-flush read-back matched the backup, and the separate RECOVERY partition retained its original hash.
+
+Android 14 Slim reported boot complete at 19:29:39 PST on Linux `3.4.113-Deathly-1.0+`. By 19:30:08 PST Android reported a validated default Wi-Fi connection, Bluetooth ON and setup complete. Package Manager found Play Store, Play services and Wemo Controller 4.4.0. The same system_server process was present two minutes after boot completion, and the crash buffer contained no fatal system-process exception at that check.
 
 ## Build locally
 
