@@ -27,7 +27,7 @@ The archived build's appended image was 5,920,125 bytes, within the SM-T700 BOOT
 
 The mainline board tree describes eMMC, SDIO Wi-Fi power sequencing and USB gadget support. Display panel support for the S6E3HA1, the Synaptics touch binding, Wi-Fi firmware/calibration, and Android binder and HAL integration remain open. The current configuration has binder and RMI4 core disabled. Keep the existing verified Android 14 BOOT image for normal use.
 
-The subsequent [early-ADB candidate](early-adb/README.md) preserves the kernel console for recovery readback and starts authenticated ADB from RAM. It has passed ARM emulation and is awaiting SM-T700 testing.
+The subsequent [early-ADB candidate](early-adb/README.md) preserves the kernel console for recovery readback and starts authenticated ADB from RAM. It passed ARM emulation and reached a fifth SM-T700 hardware boot attempt on November 19.
 
 ## Linux 7.3.1 comparison on the build host
 

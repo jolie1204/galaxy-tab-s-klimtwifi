@@ -1,6 +1,6 @@
 # SM-T700 Linux 6.12 headless boot probe
 
-**Four hardware boot attempts on November 19, 2026.** This is a stand-alone Linux diagnostic for `klimtwifi`, with no Android userspace. The embedded init mounts procfs and sysfs and attempts to bring up USB Ethernet. It does not mount the tablet's eMMC partitions.
+**The first four hardware boot attempts on November 19, 2026 are described below.** The [fifth trial](early-adb/README.md#sm-t700-hardware-trial) used a persistent RAM console and early ADB. This is a stand-alone Linux diagnostic for `klimtwifi`, with no Android userspace. The embedded init mounts procfs and sysfs and attempts to bring up USB Ethernet. It does not mount the tablet's eMMC partitions.
 
 ## Recovery and boot-loader constraints
 
