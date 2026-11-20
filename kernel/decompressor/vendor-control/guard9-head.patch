@@ -1,0 +1,71 @@
+--- a/arch/arm/boot/compressed/head.S
++++ b/arch/arm/boot/compressed/head.S
+@@ -169,0 +170,2 @@
++#include "guard9-marker.inc"
++		bl	.Lguard_sample
+@@ -180,0 +183 @@
++		bl	.Lguard_save
+@@ -461,0 +465 @@
++		bl	.Lguard_report
+@@ -466,0 +471,61 @@
++
++		/* Cortex-A7/A15 cache_on leaves r5/r6 intact. */
++.Lguard_sample:
++		mrc	p15, 0, r5, c1, c0, 0
++		mov	r6, #0
++		tst	r5, #5
++		moveq	r0, #0x40000000
++		ldreq	r6, [r0]
++		mark_vendor
++		bx	lr
++
++		/* This initialized record lies inside restart's relocation span. */
++.Lguard_save:
++		adr	r0, .Lguard_record
++		ldr	r1, .Lguard_link_offset
++		sub	r1, r0, r1
++		stmia	r0, {r5,r6}
++		str	r1, [r0, #8]
++		bx	lr
++.Lguard_link_offset:
++		.word	.Lguard_record
++.Lguard_record:
++		.word	0, 0, 0
++
++		/* The builder verifies the location and capacity in the exact OTA Image. */
++.Lguard_report:
++		adr	r3, .Lguard_record
++		ldr	r2, .Lguard_tail_offset
++		add	r2, r4, r2
++		ldrb	r0, [r2]
++		cmp	r0, #0
++		bxne	lr
++		adr	r1, .Lguard_tag
++1:		ldrb	r0, [r1], #1
++		cmp	r0, #0
++		strneb	r0, [r2], #1
++		bne	1b
++		mov	r9, #3
++2:		ldr	r0, [r3], #4
++		mov	ip, #8
++3:		mov	r0, r0, ror #28
++		and	r1, r0, #15
++		cmp	r1, #10
++		addlo	r1, r1, #48
++		addhs	r1, r1, #87
++		strb	r1, [r2], #1
++		subs	ip, ip, #1
++		bne	3b
++		subs	r9, r9, #1
++		movne	r1, #44
++		strneb	r1, [r2], #1
++		bne	2b
++		mov	r1, #0
++		strb	r1, [r2]
++		dsb	sy
++		bx	lr
++.Lguard_tail_offset:
++		.word	0x00c376cd
++.Lguard_tag:
++		.asciz	" klimtdiag="
++		.balign 4

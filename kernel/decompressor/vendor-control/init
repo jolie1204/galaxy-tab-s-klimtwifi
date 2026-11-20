@@ -12,6 +12,13 @@ if $bb mount -t proc -o nodev,nosuid,noexec proc /proc && $bb cat /proc/last_kms
 else
     log "READBACK unavailable"
 fi
+# Print only the probe field, as other boot arguments can identify the tablet.
+set -f
+for arg in $($bb cat /proc/cmdline); do
+    case "$arg" in
+        klimtdiag=*) log "ENTRY ${arg#klimtdiag=}" ;;
+    esac
+done
 log "returning to recovery"
 $bb sleep 3
 /bin/restart-recovery
