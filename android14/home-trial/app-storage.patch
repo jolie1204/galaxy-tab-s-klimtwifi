@@ -1,0 +1,48 @@
+--- a/klimt-property.rc
++++ b/klimt-property.rc
+@@ -175,7 +175,45 @@
+     mount none /data/misc/profiles/ref /data_mirror/ref_profiles bind rec
+     mkdir /data/system/dropbox 0700 system system
+     mkdir /data/media 0550 media_rw media_rw
++    mkdir /mnt/secure 0700 root root
++    mkdir /mnt/secure/asec 0700 root root
++    mkdir /mnt/asec 0755 root system
++    mkdir /mnt/obb 0755 root system
++    mkdir /mnt/media_rw 0750 root external_storage
+     mkdir /mnt/user 0755 root root
++    mkdir /mnt/user/0 0755 root root
++    mkdir /mnt/user/0/self 0755 root root
++    mkdir /mnt/user/0/emulated 0755 root root
++    mkdir /mnt/user/0/emulated/0 0755 root root
++
++    # Prepare directories for pass through processes
++    mkdir /mnt/pass_through 0700 root root
++    mkdir /mnt/pass_through/0 0710 root media_rw
++    mkdir /mnt/pass_through/0/self 0710 root media_rw
++    mkdir /mnt/pass_through/0/emulated 0710 root media_rw
++    mkdir /mnt/pass_through/0/emulated/0 0710 root media_rw
++
++    mkdir /mnt/expand 0771 system system
++    mkdir /mnt/appfuse 0711 root root
++
++    # Storage views to support runtime permissions
++    mkdir /mnt/runtime 0700 root root
++    mkdir /mnt/runtime/default 0755 root root
++    mkdir /mnt/runtime/default/self 0755 root root
++    mkdir /mnt/runtime/read 0755 root root
++    mkdir /mnt/runtime/read/self 0755 root root
++    mkdir /mnt/runtime/write 0755 root root
++    mkdir /mnt/runtime/write/self 0755 root root
++    mkdir /mnt/runtime/full 0755 root root
++    mkdir /mnt/runtime/full/self 0755 root root
++
++    # Symlink to keep legacy apps working in multi-user world
++    symlink /storage/self/primary /mnt/sdcard
++    symlink /mnt/user/0/primary /mnt/runtime/default/self/primary
++
++    mount fusectl none /sys/fs/fuse/connections
++    mount none /mnt/user/0 /storage bind rec
++    mount none none /storage slave rec
+     setprop debug.sf.nobootanimation 1
+     start hwservicemanager
+     wait_for_prop hwservicemanager.ready true
