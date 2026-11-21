@@ -1,0 +1,8 @@
+--- a/mount-trial.h
++++ b/mount-trial.h
+@@ -81 +81 @@
+-[[noreturn]] inline void CheckRoot(dev_t expected) {
++inline void CheckRoot(dev_t expected) {
+@@ -95 +95 @@
+-    Stop("PASS SYSTEM_ROOT ext4 ro mmcblk0p18 ARM32 /system/bin/init");
++    Send("SYSTEM_ROOT_VERIFIED exec installed selinux_setup");

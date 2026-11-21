@@ -4,6 +4,24 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## SELinux and second-stage init on Linux 6.12, trial 21
+
+On November 20, 2026, the SM-T700 ran its installed Android 14 `/system/bin/init` through `selinux_setup` into `SecondStageMain` on Linux 6.12.118. The PC captured the following sequence over USB CDC ACM. TWRP's retained kernel console independently contained the same trial ID and sequence. [Diagnostic source and controls](../android14/policy-entry-trial/README.md)
+
+| Kernel uptime | Physical evidence |
+| --- | --- |
+| 4.274 s | First-stage PID 1 verified the read-only internal SYSTEM root before handing off to the installed init. |
+| 5.064 s | The kernel accepted the 785,103-byte policy. SHA-256 of the bytes passed to SELinux matched the precompiled policy on the tablet. |
+| 5.067 s | The kernel audit recorded Android switching SELinux enforcement on. |
+| 5.208 s | The original init logged `init second stage started!`. The kernel measured PID 1's context as `u:r:init:s0` with enforcement enabled. Offline inspection also confirmed that the policy's init domain is enforcing. |
+| 11.416 s | Linux restarted with the command `recovery`. TWRP 3.7.0_9-0 was confirmed on the same USB port at 21:11:12 PST with a fresh boot ID. |
+
+The PC captured 12,502 bytes over ACM. Three reads of the 25,522-byte retained kernel console agreed. The diagnostic BOOT image was 7,426,064 bytes, SHA-256 `74b4b2237eb80120321d8675c0141e59a2c748ebc16e77ccaaecc76852d44948`. Full BOOT readback including the retained partition tail matched `6ccdbf5eff0a2adc29ba1568dbd83b61c09e59038011341ab3ce3e0f455569e2`. RECOVERY matched its pre-trial hash.
+
+Across the complete trial and TWRP return, 616,959 of 616,960 SYSTEM blocks and 5,119 of 5,120 EFS blocks matched their pre-trial SHA-256 at 4 KiB granularity. On each partition, only block zero differed. For SYSTEM, a byte comparison found six changed bytes in the primary ext4 superblock fields for mount time, write time, mount count and lifetime KiB written. For EFS the comparison identifies the first block, which contains the primary superblock. TWRP's kernel recorded mounts of both filesystems, and each superblock reported a clean filesystem and a last-write time during recovery startup.
+
+The installed policy (version 30) leaves two Linux 6.12 classes undefined, `mctp_socket` and `user_namespace`, along with the `bpf` and `checkpoint_restore` permissions in two capability classes. The kernel reported that access to these would be denied. A QEMU run allowed second-stage initialization to continue with an empty boot-script selection. Android attempted to mount CPU and memory cgroups that the virtual kernel did not provide. The physical trial kernel configuration also has CPU scheduling groups, cpusets, CPU accounting and the memory controller disabled. The next milestone is to reconcile the installed cgroup definitions with Linux 6.12 and verify the Android property service on hardware. Zygote, the framework and the launcher are outstanding.
+
 ## Android 14 first stage on Linux 6.12, trial 20
 
 On November 20, 2026, the physical SM-T700 ran Android 14 first-stage `init` as PID 1 on Linux `6.12.118-klimt-adbreturn1`. It discovered the installed SYSTEM by partition name, set the partition read-only at the block layer and used Android's first-stage mount to switch root. After the switch, PID 1 verified that `/` was read-only ext4 on the internal `mmcblk0p18` and that the same filesystem held an executable ARM32 `/system/bin/init`. This trial paired a source-built first-stage ramdisk with the Android 14 SYSTEM already installed on the tablet. [Diagnostic patch, fstab and build settings](../android14/first-stage-trial/README.md)
@@ -17,7 +35,7 @@ On November 20, 2026, the physical SM-T700 ran Android 14 first-stage `init` as 
 
 The RECOVERY partition matched its pre-trial SHA-256. The full SYSTEM and EFS hashes each differed across the reboot, then remained stable across two complete reads in TWRP. TWRP's own kernel logged recovery mounting SYSTEM repeatedly and EFS once. Both ext4 superblocks were clean and recorded writes during TWRP startup. The trial kernel logged its read-only SYSTEM mount, and its fstab contained no EFS entry. The pre-trial hashes alone cannot establish which bytes changed across the entire boot and recovery cycle.
 
-The diagnostic requested recovery immediately after checking the new root. The next milestone is loading SELinux policy from the installed system and observing entry into second-stage `init`. Android framework startup, the launcher and performance on 6.12 still require hardware tests. The authenticated ADB shell ran in the preceding trial. [Trial 19 USB ADB results](../kernel/early-adb/README.md#authenticated-usb-adb-on-linux-612-trial-19)
+The diagnostic requested recovery immediately after checking the new root. Trial 21 subsequently reached SELinux policy load and second-stage entry. The authenticated ADB shell ran in the preceding trial. [Trial 19 USB ADB results](../kernel/early-adb/README.md#authenticated-usb-adb-on-linux-612-trial-19)
 
 ## SM-T700 hardware ID for Android first-stage mount
 

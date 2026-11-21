@@ -1,0 +1,32 @@
+--- a/security/selinux/selinuxfs.c
++++ b/security/selinux/selinuxfs.c
+@@ -44,0 +45,4 @@
++
++#include <crypto/sha2.h>
++#include <linux/kmsg_dump.h>
++#include "policy-entry.h"
+@@ -572,0 +577,2 @@
++	if (current->pid == 1)
++		WRITE_ONCE(klimt_committed, true);
+@@ -581,0 +588,7 @@
++	if (length > 0 && length == count && current->pid == 1) {
++		u8 digest[SHA256_DIGEST_SIZE];
++
++		sha256(data, count, digest);
++		pr_notice("KLIMT-POLICY COMMITTED bytes=%zu sha256=%*phN pid=1\n",
++			  count, SHA256_DIGEST_SIZE, digest);
++	}
+--- a/kernel/printk/printk.c
++++ b/kernel/printk/printk.c
+@@ -790,0 +791 @@
++	klimt_trial_log(line);
+--- a/drivers/mmc/core/block.c
++++ b/drivers/mmc/core/block.c
+@@ -2569,0 +2570,2 @@
++	/* Diagnostic kernel: make every MMC disk read-only before scanning partitions. */
++	md->read_only = true;
+--- a/include/linux/kmsg_dump.h
++++ b/include/linux/kmsg_dump.h
+@@ -13,0 +14,2 @@
++
++void klimt_trial_log(const char *line);

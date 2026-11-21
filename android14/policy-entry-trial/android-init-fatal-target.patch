@@ -1,0 +1,5 @@
+--- a/init/reboot_utils.cpp
++++ b/init/reboot_utils.cpp
+@@ -72 +72 @@
+-        start_pos += sizeof(kRebootTargetStringPattern) - 1;
++        start_pos += kRebootTargetStringPattern.size();
