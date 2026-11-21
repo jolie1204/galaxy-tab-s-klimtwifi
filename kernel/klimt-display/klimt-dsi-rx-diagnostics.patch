@@ -1,0 +1,87 @@
+diff --git a/drivers/gpu/drm/bridge/samsung-dsim.c b/drivers/gpu/drm/bridge/samsung-dsim.c
+index a1e9981..86aa40a 100644
+--- a/drivers/gpu/drm/bridge/samsung-dsim.c
++++ b/drivers/gpu/drm/bridge/samsung-dsim.c
+@@ -1456,6 +1456,16 @@ static int samsung_dsim_transfer(struct samsung_dsim *dsi,
+ 	if (xfer->result == -ETIMEDOUT) {
+ 		struct mipi_dsi_packet *pkt = &xfer->packet;
+ 
++		if (dsi->exynos5420_mic && xfer->rx_len)
++			dev_info(dsi->dev,
++				 "KLIMT-DSIM timeout flags=%#x irq=%#x mask=%#x fifo=%#x status=%#x esc=%#x\n",
++				 xfer->flags,
++				 samsung_dsim_read(dsi, DSIM_INTSRC_REG),
++				 samsung_dsim_read(dsi, DSIM_INTMSK_REG),
++				 samsung_dsim_read(dsi, DSIM_FIFOCTRL_REG),
++				 samsung_dsim_read(dsi, DSIM_STATUS_REG),
++				 samsung_dsim_read(dsi, DSIM_ESCMODE_REG));
++
+ 		samsung_dsim_remove_transfer(dsi, xfer);
+ 		dev_err(dsi->dev, "xfer timed out: %*ph %*ph\n", 4, pkt->header,
+ 			(int)pkt->payload_length, pkt->payload);
+@@ -1479,6 +1489,11 @@ static irqreturn_t samsung_dsim_irq(int irq, void *dev_id)
+ 			dev_warn(dsi->dev, "spurious interrupt\n");
+ 		return IRQ_HANDLED;
+ 	}
++	if (dsi->exynos5420_mic &&
++	    status & (DSIM_INT_RX_DONE | DSIM_INT_RX_TIMEOUT |
++		      DSIM_INT_BTA_TIMEOUT | DSIM_INT_RX_ECC_ERR))
++		dev_info(dsi->dev, "KLIMT-DSIM receive irq=%#x\n", status);
++
+ 	samsung_dsim_write(dsi, DSIM_INTSRC_REG, status);
+ 
+ 	if (status & DSIM_INT_SW_RST_RELEASE) {
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6e3ha1-probe.c b/drivers/gpu/drm/panel/panel-samsung-s6e3ha1-probe.c
+index 08a55ed..65a2b86 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-s6e3ha1-probe.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6e3ha1-probe.c
+@@ -6,6 +6,7 @@
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/regulator/consumer.h>
++#include <video/mipi_display.h>
+ 
+ #include <drm/drm_connector.h>
+ #include <drm/drm_mipi_dsi.h>
+@@ -54,6 +55,23 @@ static int s6e3ha1_power_off(struct drm_panel *panel)
+ 	return 0;
+ }
+ 
++static ssize_t s6e3ha1_read_with_bta(struct mipi_dsi_device *dsi, void *id,
++				     size_t size)
++{
++	const u8 command = MIPI_DCS_GET_DISPLAY_ID;
++	struct mipi_dsi_msg msg = {
++		.channel = dsi->channel,
++		.type = MIPI_DSI_DCS_READ,
++		.flags = MIPI_DSI_MSG_REQ_ACK,
++		.tx_len = sizeof(command),
++		.tx_buf = &command,
++		.rx_len = size,
++		.rx_buf = id,
++	};
++
++	return dsi->host->ops->transfer(dsi->host, &msg);
++}
++
+ static int s6e3ha1_read_id(struct drm_panel *panel)
+ {
+ 	struct s6e3ha1_probe *ctx = to_s6e3ha1(panel);
+@@ -94,7 +112,16 @@ static int s6e3ha1_read_id(struct drm_panel *panel)
+ 	if (ret < 0)
+ 		goto disable_rails;
+ 
+-	ret = mipi_dsi_dcs_read(ctx->dsi, 0x04, id, sizeof(id));
++	dev_info(dev, "KLIMT-PANEL enables=%d/%d/%d volts=%d/%d/%d reset=%d\n",
++		 regulator_is_enabled(ctx->vdd3), regulator_is_enabled(ctx->vci),
++		 regulator_is_enabled(ctx->vddr), regulator_get_voltage(ctx->vdd3),
++		 regulator_get_voltage(ctx->vci), regulator_get_voltage(ctx->vddr),
++		 gpiod_get_raw_value_cansleep(ctx->reset));
++	ret = mipi_dsi_dcs_read(ctx->dsi, MIPI_DCS_GET_DISPLAY_ID, id, sizeof(id));
++	if (ret == -ETIMEDOUT) {
++		dev_info(dev, "KLIMT-PANEL retry with explicit turnaround\n");
++		ret = s6e3ha1_read_with_bta(ctx->dsi, id, sizeof(id));
++	}
+ 	if (ret != sizeof(id)) {
+ 		dev_err(dev, "KLIMT-PANEL display ID read returned %d\n", ret);
+ 		if (ret >= 0)

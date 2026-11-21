@@ -23,3 +23,9 @@ The 7553040-byte probe BOOT had SHA-256 `33db951b73763bb65f3b4b4eaeb44356cef291f
 [The follow-up diagnostic patch](klimt-dphy-link-test.patch) reproduces the downstream high-speed DCS transfer order, waits for reset and settling, and takes the existing Exynos register table values for the measured 512 MHz link. It programs the analog PHY before the PLL is enabled. The raw board DTB was unchanged from trial 32.
 
 Trial 33 initialized the host at 512 MHz with escape divider 5. High-speed DCS ID 0x04 still timed out. Trial 34 read back the downstream D-PHY values `0xaf`, `0x060b`, `0x07270d08`, and `0x090d0b`. The same command timed out again. Both runs registered the Exynos framebuffer and returned to TWRP in software. Their full BOOT and original RECOVERY readbacks matched. Whole SYSTEM/EFS comparisons found only the six known primary ext4 mount metadata byte changes on each, and both filesystems were clean. Neither run produced an Android frame or verified physical panel output.
+
+## Physical power and DSI receive diagnostics, trial 35
+
+Apply [the receive diagnostics](klimt-dsi-rx-diagnostics.patch) after the link test patch. The live S6E3HA1 probe confirmed all three panel supplies enabled at 1.8, 3.0 and 1.6 V and reset deasserted. Both automatic and explicit bus turnaround timed out on DCS ID 0x04 with no receive interrupt. Data lane 0 had left stop state at the timeout in both cases. These observations locate the remaining failure on the DSI response path. They do not establish a root cause.
+
+Exynos DRM registration and software return to TWRP were again observed. Full BOOT and RECOVERY hashes matched, the SYSTEM and EFS payloads were unchanged past block zero, and their six changed ext4 metadata bytes match earlier recovery boots. Stock TWRP also exposes the separate bootloader framebuffer range `0x67000000–0x67f9ffff`. Which framebuffer the firmware left scanning is the next readback.
