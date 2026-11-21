@@ -1,0 +1,29 @@
+--- a/drv.c
++++ b/drv.c
+@@ -42,6 +42,7 @@
+ 
+ // Dumb / generic drivers
+ extern const struct backend backend_evdi;
++extern const struct backend backend_exynos;
+ extern const struct backend backend_marvell;
+ extern const struct backend backend_mediatek;
+ extern const struct backend backend_meson;
+@@ -68,7 +69,7 @@
+ #ifdef DRV_VC4
+ 	&backend_vc4,
+ #endif
+-	&backend_evdi,	    &backend_komeda,	&backend_marvell, &backend_mediatek,
++	&backend_evdi,   &backend_exynos,	    &backend_komeda,	&backend_marvell, &backend_mediatek,
+ 	&backend_meson,	    &backend_nouveau,	&backend_radeon,  &backend_rockchip,
+ 	&backend_sun4i_drm, &backend_synaptics, &backend_udl,	  &backend_virtgpu,
+ 	&backend_vkms
+--- a/dumb_driver.c
++++ b/dumb_driver.c
+@@ -65,6 +65,7 @@
+ }
+ 
+ INIT_DUMB_DRIVER(evdi)
++INIT_DUMB_DRIVER(exynos)
+ INIT_DUMB_DRIVER(komeda)
+ INIT_DUMB_DRIVER(marvell)
+ INIT_DUMB_DRIVER(meson)
