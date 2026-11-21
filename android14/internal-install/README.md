@@ -30,3 +30,10 @@ TWRP 3.7.0_9-0 verified both complete partition writes. The revised BOOT and unt
 The two installed payloads match the local signed r2 archive byte for byte. The ARM bootloader replay passed with valid, invalid and missing ATAG cases. The archive passed detached whole-file CMS verification with the exact AOSP test certificate. The r2 ZIP SHA-256 is `e27831800195875e6245968d27985097cf80f404990d00d5e65e1f50f9fb5edd`. The off-device copies of the original BOOT, SYSTEM and USERDATA were checked against the original device hashes. The backup of USERDATA also passed a read-only ext4 check.
 
 Visible display output, touch, Android ADB, Wi-Fi, Bluetooth and battery reporting remain unverified. Keep the original TWRP and verified backups available.
+
+
+## Direct display check with the stock-calibrated 105-nit setting
+
+On the same SM-T700, raising the fixed S6E3HA1 calibration from the initial 2-nit row to the device's stock 105-nit row produced visibly readable Linux console output. The Android trial reached boot completion at 124.311 seconds. The owner saw the transition to Android and could identify the battery icon and Back triangle. The main Google Welcome area remained black. This verifies physical panel output and some Android system UI. The Home screen, touch input and the main activity's rendered content remain open.
+
+The trial wrote and checked only the BOOT partition. The factory gamma data remains private. The first 105-nit image retained the regular installation watchdog because its build wrapper delegated the non-root stage to the base script. The corrected build checks the exact embedded Android archive and timer marker after linking, and replays the complete boot image before a device write.
