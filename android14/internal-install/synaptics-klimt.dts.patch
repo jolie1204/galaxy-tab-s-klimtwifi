@@ -1,0 +1,22 @@
+--- a/arch/arm/boot/dts/samsung/exynos5420-klimt-wifi.dts
++++ b/arch/arm/boot/dts/samsung/exynos5420-klimt-wifi.dts
+@@ -154,0 +155,19 @@
++
++
++&i2c_0 {
++    status = "okay";
++
++    touchscreen@20 {
++        compatible = "syna,rmi4-i2c";
++        reg = <0x20>;
++        #address-cells = <1>;
++        #size-cells = <0>;
++
++        interrupt-parent = <&gpx1>;
++        interrupts = <6 IRQ_TYPE_LEVEL_LOW>;
++        reset-gpios = <&gpg1 1 GPIO_ACTIVE_LOW>;
++        vdd-supply = <&ldo24_reg>;
++        vio-supply = <&ldo32_reg>;
++        syna,startup-delay-ms = <100>;
++    };
++};

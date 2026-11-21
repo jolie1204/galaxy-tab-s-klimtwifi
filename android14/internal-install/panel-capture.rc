@@ -1,0 +1,10 @@
+on property:sys.boot_completed=1
+    start klimt-panel-capture
+
+service klimt-panel-capture /system/bin/sh -c "umask 077; /system/bin/toybox sleep 13; /system/bin/toybox mkdir /data/local/tmp/klimt-display-20261121 || exit 1; cd /data/local/tmp/klimt-display-20261121 || exit 1; /system/bin/dumpsys -t 14 activity activities | /system/bin/toybox grep -m 2 'topResumedActivity=' > top-activity.txt; /system/bin/dumpsys -t 14 window displays | /system/bin/toybox grep -E 'mCurrentFocus|mFocusedApp' > focus.txt; /system/bin/dumpsys -t 12 SurfaceFlinger --display-id > display-id.txt; /system/bin/dumpsys -t 12 SurfaceFlinger --displays > display-state.txt; if /system/bin/toybox grep -q 'com.google.android.setupwizard/.*WelcomeActivity' top-activity.txt; then /system/bin/toybox timeout -k 2 55 /system/bin/screencap -q setup-frame.raw && /system/bin/setprop debug.klimt_diag_35 panel_capture_saved; fi"
+    user shell
+    group shell log readproc
+    seclabel u:r:shell:s0
+    disabled
+    oneshot
+    timeout_period 150
