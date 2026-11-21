@@ -1,0 +1,46 @@
+--- a/klimt-property.rc
++++ b/klimt-property.rc
+@@ -1,5 +1,7 @@
+ import /system/etc/init/logd.rc
+ import /system/etc/init/lmkd.rc
++import /system/etc/init/gatekeeperd.rc
++import /system/etc/init/tombstoned.rc
+ import /system/etc/init/installd.rc
+ import /system/etc/init/idmap2d.rc
+ import /system/etc/init/keystore2.rc
+@@ -141,6 +143,7 @@
+     mkdir /data/system_de/0 0770 system system
+     mkdir /data/misc/keystore 0700 keystore keystore
+     mkdir /data/anr 0775 system system
++    mkdir /data/tombstones 0775 system system
+     mkdir /data/misc/vold 0700 root root
+     mkdir /data/misc/gatekeeper 0700 system system
+     mkdir /data/misc_ce 0551 system misc encryption=None
+@@ -191,6 +194,8 @@
+     write /dev/kmsg "KLIMT-NET BPF ${bpf.progs_loaded:-unset}"
+     start vold
+     start keystore2
++    start gatekeeperd
++    start tombstoned
+     init_user0
+     start lmkd
+     start vndservicemanager
+@@ -434,3 +439,18 @@
+
+ on property:bpf.progs_loaded=1 && property:ro.boot.klimt_zygote=1
+     start netd
++
++on property:debug.klimt_crash_1=*
++    write /dev/kmsg "KLIMT-HOME CRASH 1 ${debug.klimt_crash_1}"
++
++on property:debug.klimt_crash_2=*
++    write /dev/kmsg "KLIMT-HOME CRASH 2 ${debug.klimt_crash_2}"
++
++on property:debug.klimt_crash_3=*
++    write /dev/kmsg "KLIMT-HOME CRASH 3 ${debug.klimt_crash_3}"
++
++on property:debug.klimt_crash_4=*
++    write /dev/kmsg "KLIMT-HOME CRASH 4 ${debug.klimt_crash_4}"
++
++on property:debug.klimt_runtime=*
++    write /dev/kmsg "KLIMT-HOME RUNTIME ${debug.klimt_runtime}"

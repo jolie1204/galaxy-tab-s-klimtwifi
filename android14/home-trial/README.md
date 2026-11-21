@@ -1,0 +1,13 @@
+# Android 14 Home on the SM-T700
+
+These trials extend the verified [removable-system Android boot](../drm-vkms-trial/README.md#real-android-display-services-from-a-removable-system-trial-46). The isolated Android system runs read-only from microSD with disposable `/data` in tmpfs. The kernel and first-stage init retain independent timed recovery paths. Acceptance requires Android's actual `sys.boot_completed=1`, a resumed Home launcher, a composed Android frame and active scanout on the built-in panel. The [panel trial](../../kernel/klimt-display/README.md) covers the hardware and low-brightness calibration.
+
+## Trials 47 and 48
+
+Trial 47 widened the kernel recovery timer to 690 seconds and the native fallback to 735 seconds to allow the first boot to compile the preinstalled APKs. It finished ART compilation, reported `StartAudioService` and `StartBiometricService`, then lost ActivityManager, PackageManager and WindowManager from its Binder checks. SurfaceFlinger remained registered. Android's `BiometricService` requires the framework-facing GateKeeper Binder service. The diagnostic was starting only the lower-level software Gatekeeper HAL.
+
+For trial 48, [the RC patch](gatekeeper-crash.patch) imports and starts the installed `gatekeeperd` and `tombstoned` definitions, prepares `/data/tombstones` in RAM and enables the diagnostic log transport. The patch applies to the trial 47 diagnostic `klimt-property.rc`, which already starts the Binder, ART, networking and display services. Install [the polling script](home47-48-poll.sh) in the isolated system at `/system/bin/klimt-framework-poll.sh` with the same label as the stock Android shell. Run it with the existing trial service in the Android shell domain. The polling script reports actual Binder state and the boot-completed property. It attempts a native frame capture when the resolved and resumed Home components agree.
+
+On the SM-T700, `gatekeeperd` and `tombstoned` started around uptime 31 seconds. Trial 48 progressed beyond biometric initialization, and all four framework and display services still responded at 298.847 seconds. The last reported Java phase was `Permission_callback_waiting-0`. The crash buffer confirmed a `system_server` fatal exception during default runtime permission grant or upgrade. Gatekeeper remained running, and Android boot completion and Home were unverified.
+
+Both trials returned to fresh TWRP under the software timeout. The three retained-console reads agreed and the full trial BOOT and original RECOVERY matched their expected hashes. SYSTEM and EFS matched their prior payload hashes and both filesystems reported clean. The trial 48 BOOT partition SHA-256 was `11a8db896a773934cfed6cd0c97fcbef81f63155c7074daada9af91ad68954cc`.
