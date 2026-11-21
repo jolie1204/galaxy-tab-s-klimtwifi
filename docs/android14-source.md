@@ -4,6 +4,24 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## Binder IPC and service manager, trial 25
+
+The November 20, 2026 hardware trial used the installed Android 14 `servicemanager` and `service` binaries on the SM-T700 with Linux 6.12.118. A UID 2000 shell matched the manager's AIDL descriptor in the service list and found the registered name `manager`. The kernel trace paired eight synchronous Binder exchanges, including the list, descriptor, ping and lookup calls. The installed SELinux policy remained enforcing. [Diagnostic setup and log verifier](../android14/binder-ipc-trial/README.md)
+
+| Kernel uptime | Physical observation |
+| --- | --- |
+| 10.174 s | Binderfs mounted after bootstrap linker generation and ueventd coldboot. The service manager readiness property was unset. |
+| 10.240–10.349 s | Init started the installed service manager as PID 120 and observed `servicemanager.ready=true`. |
+| 10.541–10.696 s | The service list request and lookups went through the framework Binder device. The kernel matched the client and manager domains, transaction IDs and delivery on both sides. |
+| 10.758–10.765 s | The shell probe exited 0. Init confirmed the result and that the framework, hardware and vendor Binder symlinks resolved to the expected binderfs character devices. |
+| 17.122 s | Linux requested a software restart to recovery. |
+
+The deliberately unregistered lookup used the default SELinux service label. The installed policy logged a `find` denial, and the client received the expected `not found` result over Binder. The hardware and vendor Binder device checks covered filesystem type, symlink resolution and mode. The Binder transactions exercised the framework Binder device.
+
+Both ARM QEMU controls used the installed SYSTEM snapshot. The positive control recorded eight completed exchanges. With the stock manager omitted, the same client waited for `servicemanager.ready`, the kernel recorded no exchanges, and the independent timer requested recovery. The next bounded milestone is activation of the remaining factory APEX packages with temporary writable data.
+
+The physical USB ACM and retained console agreed on all eight exchanges. A fresh TWRP 3.7.0_9-0 returned at 21:53:53 PST. The 7,548,944-byte diagnostic image had SHA-256 `07df5a58f2709c9e547454edf6189671e2613e010139a835ea9bcdb56e4f599f`. The full 8 MiB BOOT readback matched `0c514ae7df61241e6b1da6518ad3b647b3f2fd1aaaccada0bf7c8635a4913329`. The RECOVERY digest matched its previous value. On each of SYSTEM and EFS six bytes differed, confined to primary ext4 mount and write metadata, and TWRP reported both filesystems clean.
+
 ## Bootstrap APEX and linker configuration, trial 24
 
 On November 20, 2026, the installed Android 14 bootstrap service activated all three expected factory packages on the physical SM-T700 running Linux 6.12.118. Init then ran the dynamic linker configuration generator from the newly mounted runtime APEX. The experiment used the existing factory packages on read-only SYSTEM, the installed enforcing SELinux policy and a diagnostic RAM script. [Diagnostic sources and QEMU controls](../android14/apex-bootstrap-trial/README.md)
@@ -17,7 +35,7 @@ On November 20, 2026, the installed Android 14 bootstrap service activated all t
 | 10.187–10.193 s | Init reported successful linker configuration generation. The file measured 6,430 bytes. Each unversioned package manifest resolved on a separate read-only ext4 loop device with its expected size. |
 | 16.482 s | The diagnostic requested a software restart to recovery. |
 
-Apexd enumerated 31 preinstalled packages and activated the three bootstrap packages. During startup the audit log recorded a denied read of the vendor GPS executable and denied devtmpfs writes. SELinux stayed enforcing throughout the successful trial. Full APEX activation, Android framework startup and interactive performance remain pending. The next bounded trial targets Binder IPC through the installed service manager.
+Apexd enumerated 31 preinstalled packages and activated the three bootstrap packages. During startup the audit log recorded a denied read of the vendor GPS executable and denied devtmpfs writes. SELinux stayed enforcing throughout the successful trial. Full APEX activation, Android framework startup and interactive performance remain pending. Trial 25 subsequently verified Binder IPC through the installed service manager.
 
 The physical ACM stream and three identical reads of the retained console agreed. A fresh TWRP 3.7.0_9-0 returned at 21:42:38 PST. The BOOT image was 7,538,704 bytes with SHA-256 `95343c452457cd74c8172de6e7fad6a84085a389cd31f6b6093832fc2987ac40`. The full 8 MiB BOOT readback matched `04eaf85ed105ec8263d10dfa4c59dbef0da9d715d10388bdb4bd422d33744ad0`, and RECOVERY retained its previous digest. On each of SYSTEM and EFS, six bytes differed, confined to primary ext4 mount/write times, mount count and lifetime writes. TWRP reported both filesystems clean.
 

@@ -1,0 +1,73 @@
+--- a/drivers/android/binder.c
++++ b/drivers/android/binder.c
+@@ -2999,6 +2999,21 @@
+ 	binder_thread_dec_tmpref(from);
+ }
+ 
++/* Current sender identity, observed on the issuing task. */
++static bool klimt_binder_domain(const char *expected)
++{
++	char *label = NULL;
++	u32 sid, len;
++	bool match;
++
++	security_current_getsecid_subj(&sid);
++	if (security_secid_to_secctx(sid, &label, &len))
++		return false;
++	match = !strcmp(label, expected);
++	security_release_secctx(label, len);
++	return match;
++}
++
+ static void binder_transaction(struct binder_proc *proc,
+ 			       struct binder_thread *thread,
+ 			       struct binder_transaction_data *tr, int reply,
+@@ -3151,6 +3166,10 @@
+ 			}
+ 		}
+ 		if (!target_node) {
++			if (!tr->target.handle && !strcmp(proc->context->name, "binder") &&
++			    !strcmp(proc->tsk->comm, "service"))
++				pr_notice_once("KLIMT-BINDER missing_context_manager client=%d\n",
++					       proc->pid);
+ 			binder_txn_error("%d:%d cannot find target node\n",
+ 				thread->pid, proc->pid);
+ 			/*
+@@ -3328,6 +3347,21 @@
+ 	}
+ 
+ 	trace_binder_transaction(reply, t, target_node);
++	/* Diagnostic only. Record a synchronous call and the ID of its reply. */
++	if (!strcmp(proc->context->name, "binder") && !(t->flags & TF_ONE_WAY)) {
++		if (!reply && !strcmp(proc->tsk->comm, "service") &&
++		    !strcmp(target_proc->tsk->comm, "servicemanager"))
++			pr_notice("KLIMT-BINDER call id=%d client=%d manager=%d code=%u uid=%u shell_domain=%u\n",
++				  t->debug_id, proc->pid, target_proc->pid, t->code,
++				  from_kuid(&init_user_ns, current_euid()),
++				  klimt_binder_domain("u:r:shell:s0"));
++		if (reply && !strcmp(proc->tsk->comm, "servicemanager") &&
++		    !strcmp(target_proc->tsk->comm, "service"))
++			pr_notice("KLIMT-BINDER reply id=%d call=%d manager=%d client=%d bytes=%llu manager_domain=%u\n",
++				  t->debug_id, in_reply_to->debug_id, proc->pid,
++				  target_proc->pid, (unsigned long long)tr->data_size,
++				  klimt_binder_domain("u:r:servicemanager:s0"));
++	}
+ 
+ 	t->buffer = binder_alloc_new_buf(&target_proc->alloc, tr->data_size,
+ 		tr->offsets_size, extra_buffers_size,
+@@ -5062,6 +5096,15 @@
+ 		ptr += trsize;
+ 
+ 		trace_binder_transaction_received(t);
++		if (!strcmp(proc->context->name, "binder") &&
++		    (cmd == BR_TRANSACTION_SEC_CTX || cmd == BR_TRANSACTION) &&
++		    !strcmp(proc->tsk->comm, "servicemanager"))
++			pr_notice("KLIMT-BINDER delivered_call id=%d manager=%d client=%d\n",
++				  t->debug_id, proc->pid, trd->sender_pid);
++		if (!strcmp(proc->context->name, "binder") && cmd == BR_REPLY &&
++		    !strcmp(proc->tsk->comm, "service"))
++			pr_notice("KLIMT-BINDER delivered_reply id=%d client=%d bytes=%llu\n",
++				  t->debug_id, proc->pid, (unsigned long long)trd->data_size);
+ 		binder_stat_br(proc, thread, cmd);
+ 		binder_debug(BINDER_DEBUG_TRANSACTION,
+ 			     "%d:%d %s %d %d:%d, cmd %u size %zd-%zd ptr %016llx-%016llx\n",

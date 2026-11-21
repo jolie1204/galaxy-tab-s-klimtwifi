@@ -1,0 +1,68 @@
+on early-init
+    mkdir /linkerconfig/bootstrap 0755
+    mkdir /linkerconfig/default 0755
+    write /linkerconfig/bootstrap/ld.config.txt \#
+    write /linkerconfig/default/ld.config.txt \#
+    chmod 644 /linkerconfig/bootstrap/ld.config.txt
+    chmod 644 /linkerconfig/default/ld.config.txt
+    mount none /linkerconfig/bootstrap /linkerconfig bind rec
+    start ueventd
+    exec_start apexd-bootstrap
+    perform_apex_config --bootstrap
+
+on init
+    mkdir /dev/binderfs
+    mount binder binder /dev/binderfs stats=global
+    chmod 0755 /dev/binderfs
+    symlink /dev/binderfs/binder /dev/binder
+    symlink /dev/binderfs/hwbinder /dev/hwbinder
+    symlink /dev/binderfs/vndbinder /dev/vndbinder
+    chmod 0666 /dev/binderfs/binder
+    chmod 0666 /dev/binderfs/hwbinder
+    chmod 0666 /dev/binderfs/vndbinder
+    write /dev/kmsg "KLIMT-BINDER BEGIN ${ro.boot.klimt_trial} cold=${ro.cold_boot_done:-unset} ready=${servicemanager.ready:-unset}"
+
+on init && property:ro.boot.klimt_binder=1
+    start servicemanager
+    wait_for_prop servicemanager.ready true
+    exec_start klimt-binder-client
+    write /dev/kmsg "KLIMT-BINDER END ${ro.boot.klimt_trial} ready=${servicemanager.ready:-unset} client=${debug.klimt_binder_probe:-unset}"
+
+on init && property:ro.boot.klimt_binder=0
+    exec_start klimt-binder-client
+
+service ueventd /system/bin/ueventd
+    class core
+    disabled
+    oneshot
+    seclabel u:r:ueventd:s0
+    user root
+
+service apexd-bootstrap /system/bin/apexd --bootstrap
+    user root
+    group system
+    oneshot
+    disabled
+    capabilities SYS_ADMIN
+
+service servicemanager /system/bin/servicemanager
+    user system
+    group system readproc
+    file /dev/kmsg w
+    task_profiles ProcessCapacityHigh
+    disabled
+    oneshot
+
+# Init expands doubled dollars and unescapes spaces and quotes before invoking sh.
+service klimt-binder-client /system/bin/sh -c listing=$$(/system/bin/service\ list)\ ||\ exit\ 20;\
+        case\ \"$$listing\"\ in\ \"Found\ 1\ services:\"*\"manager:\ [android.os.IServiceManager]\")\ ;;\ *)\ exit\ 21\ ;;\ esac;\
+        found=$$(/system/bin/service\ check\ manager)\ ||\ exit\ 22;\
+        [\ \"$$found\"\ =\ \"Service\ manager:\ found\"\ ]\ ||\ exit\ 23;\
+        absent=$$(/system/bin/service\ check\ klimt.test.absent)\ ||\ exit\ 24;\
+        [\ \"$$absent\"\ =\ \"Service\ klimt.test.absent:\ not\ found\"\ ]\ ||\ exit\ 25;\
+        /system/bin/setprop\ debug.klimt_binder_probe\ verified
+    user shell
+    group shell
+    seclabel u:r:shell:s0
+    disabled
+    oneshot
