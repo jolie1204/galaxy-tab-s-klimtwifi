@@ -1,0 +1,196 @@
+--- a/classpath-entry.h
++++ b/classpath-entry.h
+@@ -1,5 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+-/* Bounded SM-T700 factory APEX diagnostic, included from selinuxfs.c. */
++/* Bounded SM-T700 SDK and ART classpath diagnostic, included from selinuxfs.c. */
++#include <crypto/sha2.h>
+ #include <linux/magic.h>
+ #include <linux/major.h>
+ #include <linux/mount.h>
+@@ -11,6 +12,9 @@
+ static bool klimt_committed, klimt_default_ok, klimt_linker_ok, klimt_finished;
+ static struct mnt_namespace *klimt_bootstrap_ns, *klimt_default_ns;
+ static int klimt_actor;
++static bool klimt_base_ok, klimt_before_ok;
++static char klimt_env_sha[65];
++static const char klimt_exports[] = "/data/system/environ/classpath";
+ static char klimt_run[17];
+ static struct workqueue_struct *klimt_queue;
+ 
+@@ -175,15 +179,6 @@
+ 		klimt_finish();
+ }
+ 
+-static void klimt_skip(struct callback_head *work)
+-{
+-	unsigned int absent = klimt_check_modules(false);
+-
+-	pr_notice("KLIMT-FACTORY SKIPPED run=%s absent=%u actor=%d\n",
+-		  klimt_run, absent, READ_ONCE(klimt_actor));
+-	klimt_finish();
+-}
+-
+ static void klimt_after(struct callback_head *work)
+ {
+ 	unsigned int count = klimt_check_modules(true);
+@@ -198,12 +193,128 @@
+ 	pr_notice("KLIMT-FACTORY %s run=%s mounts=%u tmpfs=%u config=%u actor=%d enforcing=%u\n",
+ 		  pass ? "PASS" : "FAIL", klimt_run, count, ram, config, actor,
+ 		  enforcing_enabled());
+-	klimt_finish();
++	klimt_base_ok = pass;
++	if (!pass)
++		klimt_finish();
+ }
+ static struct callback_head klimt_pre_work = { .func = klimt_before };
+-static struct callback_head klimt_skip_work = { .func = klimt_skip };
+ static struct callback_head klimt_post_work = { .func = klimt_after };
+ 
++static bool klimt_exports_absent(void)
++{
++	struct path path;
++	int err = kern_path(klimt_exports, LOOKUP_NO_SYMLINKS, &path);
++
++	if (!err)
++		path_put(&path);
++	return err == -ENOENT;
++}
++
++static void klimt_cp_before(struct callback_head *work)
++{
++	bool absent = klimt_exports_absent();
++
++	klimt_before_ok = absent && klimt_base_ok && klimt_ram_data();
++	pr_notice("KLIMT-CP clean=%u absent=%u base=%u\n",
++		  klimt_before_ok, absent, klimt_base_ok);
++	if (!klimt_before_ok)
++		klimt_finish();
++}
++
++static void klimt_cp_skip(struct callback_head *work)
++{
++	pr_notice("KLIMT-CP SKIPPED run=%s absent=%u base=%u\n",
++		  klimt_run, klimt_exports_absent(), klimt_base_ok && klimt_before_ok);
++	klimt_finish();
++}
++
++static bool klimt_jar_exists(const char *name)
++{
++	struct path path;
++	size_t length = strlen(name);
++	bool valid;
++
++	if (length < 5 || strcmp(name + length - 4, ".jar") ||
++	    (!str_has_prefix(name, "/apex/") && !str_has_prefix(name, "/system/framework/")) ||
++	    kern_path(name, LOOKUP_NO_SYMLINKS, &path))
++		return false;
++	valid = S_ISREG(d_inode(path.dentry)->i_mode) &&
++		i_size_read(d_inode(path.dentry)) > 0;
++	path_put(&path);
++	return valid;
++}
++
++static bool klimt_match_exports(char *text)
++{
++	static const char * const names[] = {
++		"export BOOTCLASSPATH ", "export DEX2OATBOOTCLASSPATH ",
++		"export SYSTEMSERVERCLASSPATH ", "export STANDALONE_SYSTEMSERVER_JARS ",
++	};
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(names); i++) {
++		char *line = strsep(&text, "\n");
++		char *jar;
++		unsigned int count = 0;
++		size_t prefix = line ? str_has_prefix(line, names[i]) : 0;
++
++		if (!prefix)
++			return false;
++		line += prefix;
++		while ((jar = strsep(&line, ":"))) {
++			if (!klimt_jar_exists(jar)) {
++				pr_notice("KLIMT-CP missing_jar=%s\n", jar);
++				return false;
++			}
++			count++;
++		}
++		pr_notice("KLIMT-CP %sjars=%u\n", names[i], count);
++		if (!count)
++			return false;
++	}
++	return text && !*text;
++}
++
++static void klimt_cp_after(struct callback_head *work)
++{
++	const size_t limit = 8192;
++	char *data = NULL;
++	char hex[65] = {};
++	u8 digest[SHA256_DIGEST_SIZE];
++	struct file *file;
++	ssize_t bytes = -EINVAL;
++	loff_t pos = 0;
++	bool parsed = false;
++	bool pass;
++
++	file = filp_open(klimt_exports, O_RDONLY | O_NOFOLLOW, 0);
++	if (!IS_ERR(file)) {
++		data = kmalloc(limit + 1, GFP_KERNEL);
++		if (data && file_inode(file)->i_sb->s_magic == TMPFS_MAGIC &&
++		    S_ISREG(file_inode(file)->i_mode))
++			bytes = kernel_read(file, data, limit, &pos);
++		if (bytes > 0 && bytes < limit && bytes == i_size_read(file_inode(file))) {
++			data[bytes] = '\0';
++			sha256(data, bytes, digest);
++			snprintf(hex, sizeof(hex), "%*phN", SHA256_DIGEST_SIZE, digest);
++			parsed = klimt_match_exports(data);
++		}
++		fput(file);
++	}
++	kfree(data);
++	pass = parsed && !strcmp(hex, klimt_env_sha) && klimt_before_ok &&
++	       klimt_ram_data() && current->nsproxy->mnt_ns == klimt_default_ns &&
++	       enforcing_enabled() && klimt_in_domain("u:r:init:s0");
++	pr_notice("KLIMT-CP %s run=%s bytes=%zd sha256=%s parsed=%u env_match=%u enforcing=%u\n",
++		  pass ? "PASS" : "FAIL", klimt_run, bytes, hex, parsed,
++		  !!hex[0] && !strcmp(hex, klimt_env_sha), enforcing_enabled());
++	klimt_finish();
++}
++
++static struct callback_head klimt_cp_pre_work = { .func = klimt_cp_before };
++static struct callback_head klimt_cp_skip_work = { .func = klimt_cp_skip };
++static struct callback_head klimt_cp_post_work = { .func = klimt_cp_after };
++
+ void klimt_trial_log(const char *line)
+ {
+ 	char expected[112];
+@@ -235,9 +346,6 @@
+ 		WRITE_ONCE(klimt_default_ns, current->nsproxy->mnt_ns);
+ 		task_work_add(current, &klimt_pre_work, TWA_RESUME);
+ 	}
+-	snprintf(expected, sizeof(expected), "KLIMT-FACTORY SKIP %s status=unset", klimt_run);
+-	if (sysfs_streq(line, expected))
+-		task_work_add(current, &klimt_skip_work, TWA_RESUME);
+ 	if (klimt_default_ns && sysfs_streq(line,
+ 				"init: linkerconfig generated /linkerconfig with mounted APEX modules info"))
+ 		klimt_linker_ok = true;
+@@ -245,4 +353,18 @@
+ 		 klimt_run);
+ 	if (sysfs_streq(line, expected))
+ 		task_work_add(current, &klimt_post_work, TWA_RESUME);
++	snprintf(expected, sizeof(expected), "KLIMT-CP BEFORE %s api=34 r=unset s=unset t=unset u=unset ad=unset", klimt_run);
++	if (sysfs_streq(line, expected))
++		task_work_add(current, &klimt_cp_pre_work, TWA_RESUME);
++	snprintf(expected, sizeof(expected), "KLIMT-CP SKIP %s", klimt_run);
++	if (sysfs_streq(line, expected))
++		task_work_add(current, &klimt_cp_skip_work, TWA_RESUME);
++	snprintf(expected, sizeof(expected), "KLIMT-CP END %s env=", klimt_run);
++	if (str_has_prefix(line, expected)) {
++		const char *hex = line + strlen(expected);
++
++		if (strspn(hex, "0123456789abcdef") == 64 && sysfs_streq(hex + 64, ""))
++			memcpy(klimt_env_sha, hex, 64);
++		task_work_add(current, &klimt_cp_post_work, TWA_RESUME);
++	}
+ }

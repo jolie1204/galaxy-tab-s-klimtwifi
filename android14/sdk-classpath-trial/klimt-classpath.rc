@@ -1,0 +1,100 @@
+on early-init
+    mkdir /linkerconfig/bootstrap 0755
+    mkdir /linkerconfig/default 0755
+    write /linkerconfig/bootstrap/ld.config.txt \#
+    write /linkerconfig/default/ld.config.txt \#
+    chmod 644 /linkerconfig/bootstrap/ld.config.txt
+    chmod 644 /linkerconfig/default/ld.config.txt
+    mount none /linkerconfig/bootstrap /linkerconfig bind rec
+    start ueventd
+    exec_start apexd-bootstrap
+    perform_apex_config --bootstrap
+
+on init
+    mkdir /dev/binderfs
+    mount binder binder /dev/binderfs stats=global
+    chmod 0755 /dev/binderfs
+    symlink /dev/binderfs/binder /dev/binder
+    chmod 0666 /dev/binderfs/binder
+    start servicemanager
+    wait_for_prop servicemanager.ready true
+    write /dev/kmsg "KLIMT-FACTORY BOOTSTRAP ${ro.boot.klimt_trial} status=${apexd.status:-unset}"
+    enter_default_mount_ns
+    mount tmpfs tmpfs /data nosuid nodev noexec mode=0771,uid=1000,gid=1000,size=128m
+    restorecon /data
+    mkdir /data/apex 0755 root system encryption=None
+    mkdir /data/apex/active 0755 root system
+    mkdir /data/apex/backup 0700 root system
+    mkdir /data/apex/decompressed 0755 root system
+    mkdir /data/apex/hashtree 0700 root system
+    mkdir /data/apex/sessions 0700 root system
+    mkdir /data/apex/ota_reserved 0700 root system
+    mkdir /data/app-staging 0751 system system encryption=None
+    mkdir /data/misc 01771 system misc encryption=None
+    mkdir /data/misc/apexdata 0771 root system
+    mkdir /data/system 0775 system system encryption=None
+    mkdir /data/system/environ 0700 system system
+    restorecon /data/system/environ
+    write /dev/kmsg "KLIMT-FACTORY DEFAULT ${ro.boot.klimt_trial} status=${apexd.status:-unset}"
+
+on init
+    start apexd
+    wait_for_prop apexd.status activated
+    perform_apex_config
+    write /dev/kmsg "KLIMT-FACTORY END ${ro.boot.klimt_trial} status=${apexd.status:-unset} service=${init.svc.apexd:-unset}"
+
+on init
+    write /dev/kmsg "KLIMT-CP BEFORE ${ro.boot.klimt_trial} api=${ro.build.version.sdk:-unset} r=${build.version.extensions.r:-unset} s=${build.version.extensions.s:-unset} t=${build.version.extensions.t:-unset} u=${build.version.extensions.u:-unset} ad=${build.version.extensions.ad_services:-unset}"
+    exec_start derive_sdk
+    write /dev/kmsg "KLIMT-CP SDK ${ro.boot.klimt_trial} api=${ro.build.version.sdk:-unset} r=${build.version.extensions.r:-unset} s=${build.version.extensions.s:-unset} t=${build.version.extensions.t:-unset} u=${build.version.extensions.u:-unset} ad=${build.version.extensions.ad_services:-unset}"
+
+on init && property:ro.boot.klimt_classpath=1
+    exec_start derive_classpath
+    load_exports /data/system/environ/classpath
+    exec_start klimt-classpath-env
+    write /dev/kmsg "KLIMT-CP END ${ro.boot.klimt_trial} env=${debug.klimt_classpath_env:-unset}"
+
+on init && property:ro.boot.klimt_classpath=0
+    write /dev/kmsg "KLIMT-CP SKIP ${ro.boot.klimt_trial}"
+
+service ueventd /system/bin/ueventd
+    class core
+    disabled
+    oneshot
+    seclabel u:r:ueventd:s0
+    user root
+
+service apexd-bootstrap /system/bin/apexd --bootstrap
+    user root
+    group system
+    oneshot
+    disabled
+    capabilities SYS_ADMIN
+
+service servicemanager /system/bin/servicemanager
+    user system
+    group system readproc
+    file /dev/kmsg w
+    task_profiles ProcessCapacityHigh
+    disabled
+    oneshot
+
+service apexd /system/bin/apexd
+    interface aidl apexservice
+    class core
+    user root
+    group system
+    oneshot
+    disabled
+    capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER SYS_ADMIN
+
+# Init expands doubled dollars and unescapes the command as one argument.
+service klimt-classpath-env /system/bin/sh -c hash=$$(printf\ 'export\ BOOTCLASSPATH\ %s\\nexport\ DEX2OATBOOTCLASSPATH\ %s\\nexport\ SYSTEMSERVERCLASSPATH\ %s\\nexport\ STANDALONE_SYSTEMSERVER_JARS\ %s\\n'\ \"$$BOOTCLASSPATH\"\ \"$$DEX2OATBOOTCLASSPATH\"\ \"$$SYSTEMSERVERCLASSPATH\"\ \"$$STANDALONE_SYSTEMSERVER_JARS\"\ |\ /system/bin/toybox\ sha256sum)\ ||\ exit\ 20;\
+        set\ --\ $$hash;\
+        [\ \"$${#1}\"\ =\ 64\ ]\ ||\ exit\ 21;\
+        /system/bin/setprop\ debug.klimt_classpath_env\ \"$$1\"
+    user shell
+    group shell
+    seclabel u:r:shell:s0
+    disabled
+    oneshot

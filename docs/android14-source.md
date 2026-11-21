@@ -4,6 +4,21 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## SDK extensions and ART classpath, trial 27
+
+On November 20, 2026, the installed Android 14 SDK Extensions APEX supplied both native one-shot services on the physical SM-T700 with Linux 6.12.118. The experiment reused the temporary writable tmpfs at /data and the installed enforcing policy. [Trial source and verifier](../android14/sdk-classpath-trial/README.md)
+
+| Kernel uptime | Physical observation |
+| --- | --- |
+| 17.543–17.545 s | Init saw all 31 active APEXes. The classpath file was absent and all five extension properties were unset. The base Android API was 34. |
+| 17.716–17.722 s | `derive_sdk` (PID 187, UID 9999) exited 0, and R, S, T, U and Ad Services all read back as extension version 11. |
+| 17.933 s | `derive_classpath` (PID 188, UID 1000) exited 0 after generating the export file. |
+| 18.310–18.341 s | The UID 2000 shell exited 0 after reconstructing the four exports from its environment. The generated file, shell output and host reconstruction from the 38 installed protobuf fragments matched byte for byte by SHA-256. |
+
+The generated file contained 3,887 bytes with 39 BOOTCLASSPATH, 14 DEX2OATBOOTCLASSPATH, 13 SYSTEMSERVERCLASSPATH and 7 STANDALONE_SYSTEMSERVER_JARS path entries. The kernel verified each entry resolves to a nonempty regular JAR. The shared digest was `0de7b2d619babd1ad9e9ce64548dff15c3f8e16a63bcdf4c2ec969efb17696e1`. In the negative ARM QEMU control, `derive_sdk` completed and the classpath file stayed absent through the recovery request. This checkpoint covers the exports consumed by ART. Its boot helpers and Zygote remain to be verified.
+
+The diagnostic requested recovery at kernel uptime 24.802 s. The USB ACM stream and three identical reads of the retained console agreed on both service exits, five extension values and the classpath digest. A fresh TWRP 3.7.0_9-0 returned at 22:12:16 PST. The image measured 7,544,848 bytes with SHA-256 `20ffea88bec3f10bdb25cb24d4df99d458270fac0772b9c6583bae4bda3e2a1e`. The full 8 MiB BOOT readback matched `f184c05ed1128f4903f497caa99b9bc238348e045b7dba928ea71dc6dfd2acf6` and the RECOVERY digest matched the previous trial. The complete SYSTEM and EFS ranges differed only in six bytes of primary ext4 metadata on each partition. TWRP reported both filesystems clean.
+
 ## Full factory APEX activation, trial 26
 
 On November 20, 2026, the installed Android 14 apexd activated all 31 packages from the system and vendor image on the physical SM-T700 running Linux 6.12.118. Init used a temporary writable tmpfs at /data and the installed enforcing SELinux policy. [Trial sources, inventory and console verifier](../android14/factory-apex-trial/README.md)
@@ -15,7 +30,7 @@ On November 20, 2026, the installed Android 14 apexd activated all 31 packages f
 | 17.156–17.341 s | Apexd mounted all 31 factory packages, completed its activation routine in 1,406 ms and published the activated status. PID 121 ran in the expected SELinux domain and default mount namespace. |
 | 17.658–17.669 s | Init generated the default linker configuration. It could see the APEX inventory and 31 manifests on separate read-only ext4 loop devices. |
 
-The final ARM QEMU control repeated the same setup with the regular daemon skipped. Both checks in the default namespace found 31 absent manifests, and the kernel returned to recovery. The successful runs matched the installed package names, versions and source paths. Physical vold, persistent userdata, the later APEX ready phase and Android framework launch remain to be verified. The next checkpoint is deriving the SDK and ART classpath from the activated packages.
+The final ARM QEMU control repeated the same setup with the regular daemon skipped. Both checks in the default namespace found 31 absent manifests, and the kernel returned to recovery. The successful runs matched the installed package names, versions and source paths. Physical vold, persistent userdata, the later APEX ready phase and Android framework launch remain to be verified. Trial 27 subsequently verified SDK derivation and the ART classpath exports.
 
 The kernel exposed internal MMC read-only and requested a software recovery restart at uptime 24.162 s. USB ACM and three identical reads of the retained console agreed on the 31 mounts. Fresh TWRP 3.7.0_9-0 returned at 22:04:51 PST. The 7,544,848-byte BOOT image had SHA-256 `5449f7770b2f88f7ce16b993212ccedf28926713c248cdc3a8ec4e1a1b58127f`. The full 8 MiB BOOT readback matched `c8be266f3810d57b1ece40e684115dcb77ef81e2111c69620f0fb4c920b7630a`, and the RECOVERY hash matched the previous trial. The audit log recorded a denied `none-iosched` module request during APEX startup. All 31 packages still activated under the installed enforcing policy. On each of SYSTEM and EFS six bytes differed, confined to primary ext4 mount and write metadata. TWRP reported both filesystems clean.
 
