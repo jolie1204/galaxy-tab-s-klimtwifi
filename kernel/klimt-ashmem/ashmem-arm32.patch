@@ -1,0 +1,26 @@
+--- a/drivers/android/Kconfig
++++ b/drivers/android/Kconfig
+@@ -50,0 +51,6 @@
++
++config ASHMEM
++	bool "Android anonymous shared memory"
++	depends on SHMEM && MMU
++	help
++	  Provide the legacy /dev/ashmem ABI for Android userspace.
+--- a/drivers/android/Makefile
++++ b/drivers/android/Makefile
+@@ -6,0 +7,2 @@
++
++obj-$(CONFIG_ASHMEM) += ashmem.o
+--- a/drivers/android/ashmem.c
++++ b/drivers/android/ashmem.c
+@@ -23 +22,0 @@
+-#include <linux/page_size_compat.h>
+@@ -390 +389 @@
+-	if (vma->vm_end - vma->vm_start > __PAGE_ALIGN(asma->size)) {
++	if (vma->vm_end - vma->vm_start > PAGE_ALIGN(asma->size)) {
+--- a/drivers/android/ashmem.h
++++ b/drivers/android/ashmem.h
+@@ -19,2 +18,0 @@
+-const gfp_t RUST_CONST_HELPER___GFP_FS = ___GFP_FS;
+-const gfp_t RUST_CONST_HELPER___GFP_IO = ___GFP_IO;
