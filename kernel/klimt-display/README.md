@@ -17,3 +17,9 @@ Linux 6.12.118 registered Exynos DRM minor 0 and the `exynosdrmfb` framebuffer o
 Two source patches replayed against 6.12.118 with zero fuzz. The ARM linked image and device tree were verified, and all three packed-image replays matched. The next DCS test uses the downstream host initialization and high-speed command order.
 
 The 7553040-byte probe BOOT had SHA-256 `33db951b73763bb65f3b4b4eaeb44356cef291f7d65b45544ab8b20755dd1180`; the full partition readback was `be7b1f24cefb21d135078d58679e64009b107e6d9269f5b4692f03da5b6abdaf`.
+
+## Link order and 512 MHz D-PHY, trials 33 and 34
+
+[The follow-up diagnostic patch](klimt-dphy-link-test.patch) reproduces the downstream high-speed DCS transfer order, waits for reset and settling, and takes the existing Exynos register table values for the measured 512 MHz link. It programs the analog PHY before the PLL is enabled. The raw board DTB was unchanged from trial 32.
+
+Trial 33 initialized the host at 512 MHz with escape divider 5. High-speed DCS ID 0x04 still timed out. Trial 34 read back the downstream D-PHY values `0xaf`, `0x060b`, `0x07270d08`, and `0x090d0b`. The same command timed out again. Both runs registered the Exynos framebuffer and returned to TWRP in software. Their full BOOT and original RECOVERY readbacks matched. Whole SYSTEM/EFS comparisons found only the six known primary ext4 mount metadata byte changes on each, and both filesystems were clean. Neither run produced an Android frame or verified physical panel output.
