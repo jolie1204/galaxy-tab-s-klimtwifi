@@ -59,3 +59,11 @@ The stock control boot used the matching 3.4.113 Samsung source and RAM-only use
 The successful path used an escape divider of 8 (8 MHz) and a stop-state counter of 1. The 6.12 test used a divider of 5 (12.8 MHz) and a counter of 15. The control returned to TWRP in software and the verified 6.12 BOOT was restored.
 
 The trial 41 source patch reproduced the linked driver's source with zero fuzz. The DTB was unchanged and all three packed-image replays passed. The full BOOT readback and subsequent restore both matched `f9d5ba01baaaba21a1e0b2d2a3d945250dad17c8a752b4760fb6b5d8f4d72372`. RECOVERY matched the original digest in both trials. SYSTEM and EFS retained their payload hashes and reported clean. Only six primary ext4 metadata bytes changed on each.
+
+## Matched escape clock and stop-state count, trial 42
+
+[The low-power settings probe](klimt-dsim-low-power.patch) sets the Klimt DT escape clock to 8 MHz, uses the measured stop-state counter of one and applies video timing before the maximum-return packet. The compiled DTB and the final packaged DTB agree on the new frequency. The final DTB preserves all previous firmware, recovery and USB properties.
+
+The SM-T700 physical readback matched the stock CLKCTRL `0x91f80008`, ESCMODE `0x00200000`, TIMEOUT `0x00ffffff` and PLLCTRL `0x00806400`. Before the first ID request, Linux read STATUS `0x80100400`; the stock capture before the preceding maximum-return command had STATUS `0x8010040f`. The two observations bracket different points in the transaction. Linux still timed out on DCS 0x04. The stock driver waits for the header FIFO to drain for the maximum-return packet, while Linux 6.12 completes a short write upon placing the header in the FIFO. The next diagnostic measures that completion interrupt.
+
+The patch applies with zero fuzz, all three exact packed replays passed, and the live USB ACM log and three matching retained reads showed the Exynos framebuffer and the DCS timeout. Software returned to TWRP. The full BOOT readback was `87b21a9315796b9e58843eaef205586fb78f0c32994046cb0e5f6f3b4c4a3b04`, and original RECOVERY matched. SYSTEM and EFS were clean and had unchanged payload hashes, with only the familiar six primary filesystem metadata bytes changed.
