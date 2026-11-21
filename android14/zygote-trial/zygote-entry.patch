@@ -1,0 +1,121 @@
+--- a/zygote-entry.h
++++ b/zygote-entry.h
+@@ -7,6 +7,7 @@
+ #include <linux/major.h>
+ #include <linux/mount.h>
+ #include <linux/nsproxy.h>
++#include <linux/sched/signal.h>
+ #include <linux/reboot.h>
+ #include <linux/task_work.h>
+ #include <linux/workqueue.h>
+@@ -15,7 +16,8 @@
+ static struct mnt_namespace *klimt_bootstrap_ns, *klimt_default_ns;
+ static int klimt_actor;
+ static bool klimt_base_ok, klimt_before_ok, klimt_cp_ok, klimt_art_ready;
+-static int klimt_boot_pid, klimt_odrefresh_pid;
++static int klimt_boot_pid, klimt_odrefresh_pid, klimt_zygote_pid;
++static bool klimt_art_ok;
+ static char klimt_env_sha[65];
+ static const char klimt_exports[] = "/data/system/environ/classpath";
+ static char klimt_run[17];
+@@ -36,7 +38,7 @@
+ 		kernel_restart("recovery");
+ 		return -ENOMEM;
+ 	}
+-	queue_delayed_work(klimt_queue, &klimt_reboot, 82 * HZ);
++	queue_delayed_work(klimt_queue, &klimt_reboot, 125 * HZ);
+ 	return 0;
+ }
+ late_initcall(klimt_start_timeout);
+@@ -328,6 +330,10 @@
+ 		domain = "u:r:odrefresh:s0";
+ 		label = "odrefresh";
+ 		actor = &klimt_odrefresh_pid;
++	} else if (!strcmp(path, "/system/bin/app_process")) {
++		domain = "u:r:zygote:s0";
++		label = "zygote";
++		actor = &klimt_zygote_pid;
+ 	} else {
+ 		return;
+ 	}
+@@ -369,12 +375,55 @@
+ 
+ static void klimt_art_after(struct callback_head *work)
+ {
+-	pr_notice("KLIMT-ART checked run=%s art_pid=%d odr_pid=%d flags=%u ram=%u cache_absent=%u enforcing=%u\n",
+-		  klimt_run, READ_ONCE(klimt_boot_pid), READ_ONCE(klimt_odrefresh_pid),
+-		  klimt_art_ready, klimt_ram_data(), klimt_cache_absent(), enforcing_enabled());
++	klimt_art_ok = READ_ONCE(klimt_boot_pid) && READ_ONCE(klimt_odrefresh_pid) &&
++		       klimt_art_ready && klimt_ram_data() && klimt_cache_absent() &&
++		       enforcing_enabled();
++	pr_notice("KLIMT-ZYGOTE ART ready=%u\n", klimt_art_ok);
++	if (!klimt_art_ok)
++		klimt_finish();
++}
++
++static void klimt_zygote_cache(struct callback_head *work)
++{
++	struct path path;
++	int error = kern_path("/data/misc/apexdata/com.android.art/dalvik-cache/cache-info.xml",
++			      LOOKUP_NO_SYMLINKS, &path);
++	bool ok = false;
++
++	if (!error) {
++		struct inode *inode = d_inode(path.dentry);
++
++		ok = inode->i_sb->s_magic == TMPFS_MAGIC && S_ISREG(inode->i_mode) &&
++		     i_size_read(inode) > 0;
++		path_put(&path);
++	}
++	pr_notice("KLIMT-ZYGOTE cache_present=%u prior_art=%u error=%d\n", ok, klimt_art_ok, error);
++	if (!ok || !klimt_art_ok)
++		klimt_finish();
++}
++
++static void klimt_zygote_end(struct callback_head *work)
++{
++	struct task_struct *p;
++	int server = 0;
++	char comm[TASK_COMM_LEN];
++
++	rcu_read_lock();
++	for_each_process(p) {
++		get_task_comm(comm, p);
++		if (!strcmp(comm, "system_server")) {
++			server = task_tgid_nr(p);
++			break;
++		}
++	}
++	rcu_read_unlock();
++	pr_notice("KLIMT-ZYGOTE checked run=%s zygote=%d system_server=%d enforcing=%u\n",
++		  klimt_run, READ_ONCE(klimt_zygote_pid), server, enforcing_enabled());
+ 	klimt_finish();
+ }
+ 
++static struct callback_head klimt_zygote_cache_work = { .func = klimt_zygote_cache };
++static struct callback_head klimt_zygote_end_work = { .func = klimt_zygote_end };
+ static struct callback_head klimt_art_pre_work = { .func = klimt_art_before };
+ static struct callback_head klimt_art_post_work = { .func = klimt_art_after };
+ 
+@@ -435,10 +484,17 @@
+ 		 "KLIMT-ART FLAGS %s profile=true stats=true", klimt_run);
+ 	if (sysfs_streq(line, expected))
+ 		klimt_art_ready = true;
+-	snprintf(expected, sizeof(expected), "KLIMT-ART END %s log=", klimt_run);
+-	if (str_has_prefix(line, expected))
+-		task_work_add(current, &klimt_art_post_work, TWA_RESUME);
+-	snprintf(expected, sizeof(expected), "KLIMT-ART SKIP %s", klimt_run);
++	snprintf(expected, sizeof(expected),
++		 "KLIMT-ART END %s log=version=1,boot=ok,server=ok", klimt_run);
+ 	if (sysfs_streq(line, expected))
+ 		task_work_add(current, &klimt_art_post_work, TWA_RESUME);
++	snprintf(expected, sizeof(expected), "KLIMT-ZYGOTE CACHE %s", klimt_run);
++	if (sysfs_streq(line, expected))
++		task_work_add(current, &klimt_zygote_cache_work, TWA_RESUME);
++	snprintf(expected, sizeof(expected), "KLIMT-ZYGOTE END %s log=", klimt_run);
++	if (str_has_prefix(line, expected))
++		task_work_add(current, &klimt_zygote_end_work, TWA_RESUME);
++	snprintf(expected, sizeof(expected), "KLIMT-ZYGOTE SKIP %s", klimt_run);
++	if (sysfs_streq(line, expected))
++		task_work_add(current, &klimt_zygote_end_work, TWA_RESUME);
+ }

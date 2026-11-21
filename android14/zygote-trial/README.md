@@ -1,0 +1,13 @@
+# Android 14 Zygote and system_server on SM-T700
+
+Trial 29 verifies the first Java framework entry on Linux 6.12.118. It uses the installed Android 14 SYSTEM, verified factory APEXes and exports, the kernel with userfaultfd enabled, and a 384 MiB temporary tmpfs at /data. The kernel exposes internal storage read-only.
+
+## Reproducing the diagnostic
+
+1. Use the userfaultfd retest configuration from [trial 28](../art-startup-trial/README.md). Reconstruct that trial's entry header, copy it to `zygote-entry.h`, and apply [zygote-entry.patch](zygote-entry.patch) from its containing directory using `patch -p1`. Use the resulting header as the SELinux entry probe. The kernel retains a 125-second fallback recovery deadline.
+2. Rebuild the existing static first-stage init using the [previous ramdisk inputs](../property-service-trial/README.md) and [first-stage-timeout.patch](first-stage-timeout.patch) on the private mount-trial header. This gives the first-stage recovery fallback 150 seconds before reporting a timeout. Package [klimt-zygote.rc](klimt-zygote.rc) as `/klimt-property.rc` in the embedded ramdisk. Use a fresh 16-digit hexadecimal run ID in the bootconfig, ramdisk and decompressor records, and select `androidboot.klimt_zygote=1` and USB serial `SMT700-ZYGOTE`.
+3. The stock first-stage environment, early process limits and foreground cpuset are present before the launcher runs. The diagnostic accepts the ART prebuilt files with `odrefresh --check`, runs `odrefresh --compile` against the fresh RAM directory, then requires a new cache file and a second check with exit code 0. The direct diagnostic path uses the installed userdebug launcher transition and leaves the normal Keystore/signing integration to the product boot sequence.
+4. The selected service has the installed `app_process --zygote --start-system-server` entry point and standard sockets. Android's supported `--enable-lazy-preload` switch defers eager class preloading for this test. The kernel verifies the enforcing Zygote executable. The log collector checks the native fork and Java SystemServer entry, and the kernel observes the live child. The positive physical verifier uses `--expect-server`. The positive ARM QEMU run confirmed the live forked process within the collection interval. The negative control with `androidboot.klimt_zygote=0` prepares the cache and skips Zygote. Both controls request a software reboot to recovery.
+5. Run [verify-zygote-log.py](verify-zygote-log.py) with the run ID on the USB ACM and retained console, supplying `--negative` for the skipped run.
+
+This verifies Java framework entry and the live process. Home completion requires Android boot completion, a resumed launcher and visible built-in display output.

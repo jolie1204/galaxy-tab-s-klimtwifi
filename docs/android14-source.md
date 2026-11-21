@@ -4,6 +4,22 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## Zygote and system_server, trial 29
+
+The November 20, 2026 SM-T700 trial used the installed Android 14 userspace on Linux 6.12.118 with userfaultfd enabled. It used an isolated tmpfs at /data and the installed enforcing SELinux policy. The standard Android early process limits and foreground cpuset restored Zygote's native scheduling setup. The diagnostic used Android's supported lazy preload option to observe the system_server fork without waiting for eager class preloading. [Source and verifier](../android14/zygote-trial/README.md)
+
+| Kernel uptime | Physical observation |
+| --- | --- |
+| 20.454 s | The ROM's installed ARM boot and system_server artifacts were accepted. |
+| 21.083–21.553 s | Odrefresh prepared fresh runtime cache metadata, returned 80, then returned 0 on a separate check. The cache file was present on RAM /data. |
+| 21.650 s | The installed `app_process` executed as PID 216 in enforcing `u:r:zygote:s0`. |
+| 38.844 s | The native fork and Java SystemServer entry logs were both present, and the kernel observed system_server PID 224 alive. |
+| 45.282 s | The kernel requested a software restart to recovery. |
+
+The final ARM QEMU positive case verified the metadata and live fork but did not observe the Java entry within its timed window. The skipped control generated valid metadata and returned without starting Zygote. The system did not launch Home in this diagnostic. On the physical tablet, Panfrost registered its GPU device. The 6.12 board tree has FIMD and DSI disabled. TWRP reported Samsung S6E3HA1 panel ID `42:11:03` and a 1600×2560 at 60 Hz framebuffer. Display controller and vendor graphics integration remain open.
+
+TWRP 3.7.0_9-0 returned by software at 22:45:45 PST. The 7,563,280-byte diagnostic image had SHA-256 `50c5f0faf0d32ad1fd6e996dc81242a648cac55085f45c39e4e33911af624625`. The full 8 MiB BOOT readback matched `58f946933f56d195fadc3729ffe5252770489794338fddf22aef638e7063f64e` and RECOVERY matched the previous trial. ACM and the retained console agreed. EFS and SYSTEM differed only in six primary ext4 metadata bytes each and reported clean.
+
 ## ART startup and boot artifact check, trial 28
 
 On November 20, 2026, the installed Android 14 ART startup service ran on the physical SM-T700 with Linux 6.12.118. This trial reused all 31 installed APEXes, the verified classpath and writable RAM /data. The userdebug launch shim invoked the stock artifact checker in its enforcing SELinux domain. [Trial source and verifier](../android14/art-startup-trial/README.md)
@@ -24,7 +40,7 @@ USB ACM and three identical reads of the retained console agreed. TWRP 3.7.0_9-0
 
 Enabling `CONFIG_USERFAULTFD` resolved the precondition failure in two ARM QEMU comparisons and on the physical tablet. The only functional kernel configuration change was userfaultfd. On hardware, installed `art_boot` exited 0. Installed `odrefresh --check` accepted the existing /system ARM boot images and system_server artifacts. At uptime 20.379 s the probe confirmed both decisions, enforcing SELinux and an absent RAM cache-info file. Exit 79 remained because odrefresh still needs to generate the absent cache metadata. Recovery was requested at 26.722 s and TWRP returned at 22:30:15 PST.
 
-The 7,557,136-byte retest image had SHA-256 `308efd712125eace583bc8e7013f1cd08f7361924c720495acf53f33f0736d74`. The full BOOT readback matched `86b3f073acb58610e21e932cb306d2881efc17c9377ae6ca9cf344fc7742ca3e`. RECOVERY matched the existing hash, and complete SYSTEM and EFS comparisons again found only six ext4 metadata bytes changed on each. Positive and negative ARM QEMU controls and three packaged replays also passed. The next framework checkpoint is using the accepted artifacts to start Zygote and system_server. The installed display stack and the kernel panel path still need integration for launcher output.
+The 7,557,136-byte retest image had SHA-256 `308efd712125eace583bc8e7013f1cd08f7361924c720495acf53f33f0736d74`. The full BOOT readback matched `86b3f073acb58610e21e932cb306d2881efc17c9377ae6ca9cf344fc7742ca3e`. RECOVERY matched the existing hash, and complete SYSTEM and EFS comparisons again found only six ext4 metadata bytes changed on each. Positive and negative ARM QEMU controls and three packaged replays also passed. Trial 29 subsequently used the accepted artifacts to start Zygote and system_server. The installed display stack and the kernel panel path still need integration for launcher output.
 
 ## SDK extensions and ART classpath, trial 27
 

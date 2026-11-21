@@ -1,0 +1,11 @@
+--- a/mount-trial.h
++++ b/mount-trial.h
+@@ -60,7 +60,7 @@
+     StageTrialFile("/klimt-cgroups.original", "/dev/klimt-cgroups.original");
+     pid_t child = fork();
+     if (child == 0) {
+-        sleep(65);
++        sleep(150);
+         Stop("FAIL watchdog");
+     }
+     if (child < 0) Stop("FAIL watchdog fork");

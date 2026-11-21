@@ -1,0 +1,218 @@
+import /system/etc/init/logd.rc
+
+on early-init
+    export ANDROID_BOOTLOGO 1
+    export ANDROID_ROOT /system
+    export ANDROID_ASSETS /system/app
+    export ANDROID_DATA /data
+    export ANDROID_STORAGE /storage
+    export ANDROID_ART_ROOT /apex/com.android.art
+    export ANDROID_I18N_ROOT /apex/com.android.i18n
+    export ANDROID_TZDATA_ROOT /apex/com.android.tzdata
+    export EXTERNAL_STORAGE /sdcard
+    export ASEC_MOUNTPOINT /mnt/asec
+    mkdir /linkerconfig/bootstrap 0755
+    mkdir /linkerconfig/default 0755
+    write /linkerconfig/bootstrap/ld.config.txt \#
+    write /linkerconfig/default/ld.config.txt \#
+    chmod 644 /linkerconfig/bootstrap/ld.config.txt
+    chmod 644 /linkerconfig/default/ld.config.txt
+    mount none /linkerconfig/bootstrap /linkerconfig bind rec
+    setrlimit nice 40 40
+    setrlimit nofile 32768 32768
+    setrlimit memlock 65536 65536
+    mkdir /dev/memcg/apps 0755 system system
+    mkdir /dev/memcg/system 0550 system system
+    mkdir /dev/cpuset/foreground
+    copy /dev/cpuset/cpus /dev/cpuset/foreground/cpus
+    copy /dev/cpuset/mems /dev/cpuset/foreground/mems
+    chown system system /dev/cpuset/foreground/cgroup.procs
+    start ueventd
+    exec_start apexd-bootstrap
+    perform_apex_config --bootstrap
+
+on init
+    mkdir /dev/binderfs
+    mount binder binder /dev/binderfs stats=global
+    chmod 0755 /dev/binderfs
+    symlink /dev/binderfs/binder /dev/binder
+    chmod 0666 /dev/binderfs/binder
+    start servicemanager
+    wait_for_prop servicemanager.ready true
+    write /dev/kmsg "KLIMT-FACTORY BOOTSTRAP ${ro.boot.klimt_trial} status=${apexd.status:-unset}"
+    enter_default_mount_ns
+    mount tmpfs tmpfs /data nosuid nodev noexec mode=0771,uid=1000,gid=1000,size=384m
+    restorecon /data
+    mkdir /data/apex 0755 root system encryption=None
+    mkdir /data/apex/active 0755 root system
+    mkdir /data/apex/backup 0700 root system
+    mkdir /data/apex/decompressed 0755 root system
+    mkdir /data/apex/hashtree 0700 root system
+    mkdir /data/apex/sessions 0700 root system
+    mkdir /data/apex/ota_reserved 0700 root system
+    mkdir /data/app-staging 0751 system system encryption=None
+    mkdir /data/misc 01771 system misc encryption=None
+    mkdir /data/misc/apexdata 0771 root system
+    mkdir /data/system 0775 system system encryption=None
+    mkdir /data/system/environ 0700 system system
+    restorecon /data/system/environ
+    write /dev/kmsg "KLIMT-FACTORY DEFAULT ${ro.boot.klimt_trial} status=${apexd.status:-unset}"
+
+on init
+    start apexd
+    wait_for_prop apexd.status activated
+    perform_apex_config
+    write /dev/kmsg "KLIMT-FACTORY END ${ro.boot.klimt_trial} status=${apexd.status:-unset} service=${init.svc.apexd:-unset}"
+
+on init
+    write /dev/kmsg "KLIMT-CP BEFORE ${ro.boot.klimt_trial} api=${ro.build.version.sdk:-unset} r=${build.version.extensions.r:-unset} s=${build.version.extensions.s:-unset} t=${build.version.extensions.t:-unset} u=${build.version.extensions.u:-unset} ad=${build.version.extensions.ad_services:-unset}"
+    exec_start derive_sdk
+    write /dev/kmsg "KLIMT-CP SDK ${ro.boot.klimt_trial} api=${ro.build.version.sdk:-unset} r=${build.version.extensions.r:-unset} s=${build.version.extensions.s:-unset} t=${build.version.extensions.t:-unset} u=${build.version.extensions.u:-unset} ad=${build.version.extensions.ad_services:-unset}"
+
+on init
+    exec_start derive_classpath
+    load_exports /data/system/environ/classpath
+    exec_start klimt-classpath-env
+    write /dev/kmsg "KLIMT-CP END ${ro.boot.klimt_trial} env=${debug.klimt_classpath_env:-unset}"
+
+on init
+    mkdir /data/misc/odrefresh 0777 system system
+    restorecon /data/misc/odrefresh
+    start logd
+    wait_for_prop logd.ready true
+    write /dev/kmsg "KLIMT-ART BEFORE ${ro.boot.klimt_trial} profile=${dalvik.vm.features.embedded_profile:-unset} stats=${dalvik.vm.features.art_managed_file_stats:-unset} zygote=${ro.zygote:-unset}"
+    exec_start art_boot
+    write /dev/kmsg "KLIMT-ART FLAGS ${ro.boot.klimt_trial} profile=${dalvik.vm.features.embedded_profile:-unset} stats=${dalvik.vm.features.art_managed_file_stats:-unset}"
+
+on init
+    exec_start klimt-odrefresh
+    exec_start klimt-art-log
+    write /dev/kmsg "KLIMT-ART SYSTEM ${ro.boot.klimt_trial} ${debug.klimt_art_system:-unreported}"
+    write /dev/kmsg "KLIMT-ART CACHE ${ro.boot.klimt_trial} ${debug.klimt_art_cache:-unreported}"
+    write /dev/kmsg "KLIMT-ART END ${ro.boot.klimt_trial} log=${debug.klimt_art_log:-unset}"
+
+on init
+    mkdir /data/dalvik-cache 0771 root root encryption=None
+    mkdir /data/dalvik-cache/arm 0771 root root
+    mkdir /data/system/users 0775 system system
+    mkdir /data/user 0711 system system encryption=None
+    mkdir /data/user_de 0711 system system encryption=None
+    mkdir /data/misc/profiles 0771 system system
+    mkdir /data/misc/profiles/cur 0771 system system
+    mkdir /data/misc/profiles/ref 0771 system system
+    exec_start klimt-cache
+    exec_start klimt-cache-recheck
+    write /dev/kmsg "KLIMT-ZYGOTE CACHE ${ro.boot.klimt_trial}"
+
+on init && property:ro.boot.klimt_zygote=1
+    start zygote
+    exec_start klimt-zygote-log
+    write /dev/kmsg "KLIMT-ZYGOTE DETAIL ${ro.boot.klimt_trial} ${debug.klimt_zygote_detail:-unreported}"
+    write /dev/kmsg "KLIMT-ZYGOTE END ${ro.boot.klimt_trial} log=${debug.klimt_zygote_log:-unset}"
+
+on init && property:ro.boot.klimt_zygote=0
+    write /dev/kmsg "KLIMT-ZYGOTE SKIP ${ro.boot.klimt_trial}"
+
+service ueventd /system/bin/ueventd
+    class core
+    disabled
+    oneshot
+    seclabel u:r:ueventd:s0
+    user root
+
+service apexd-bootstrap /system/bin/apexd --bootstrap
+    user root
+    group system
+    oneshot
+    disabled
+    capabilities SYS_ADMIN
+
+service servicemanager /system/bin/servicemanager
+    user system
+    group system readproc
+    file /dev/kmsg w
+    task_profiles ProcessCapacityHigh
+    disabled
+    oneshot
+
+service apexd /system/bin/apexd
+    interface aidl apexservice
+    class core
+    user root
+    group system
+    oneshot
+    disabled
+    capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER SYS_ADMIN
+
+# Init expands doubled dollars and unescapes the command as one argument.
+service klimt-classpath-env /system/bin/sh -c hash=$$(printf\ 'export\ BOOTCLASSPATH\ %s\\nexport\ DEX2OATBOOTCLASSPATH\ %s\\nexport\ SYSTEMSERVERCLASSPATH\ %s\\nexport\ STANDALONE_SYSTEMSERVER_JARS\ %s\\n'\ \"$$BOOTCLASSPATH\"\ \"$$DEX2OATBOOTCLASSPATH\"\ \"$$SYSTEMSERVERCLASSPATH\"\ \"$$STANDALONE_SYSTEMSERVER_JARS\"\ |\ /system/bin/toybox\ sha256sum)\ ||\ exit\ 20;\
+        set\ --\ $$hash;\
+        [\ \"$${#1}\"\ =\ 64\ ]\ ||\ exit\ 21;\
+        /system/bin/setprop\ debug.klimt_classpath_env\ \"$$1\"
+    user shell
+    group shell
+    seclabel u:r:shell:s0
+    disabled
+    oneshot
+
+
+service klimt-odrefresh /system/bin/sh -c "exec /apex/com.android.art/bin/odrefresh --check"
+    seclabel u:r:su:s0
+    user root
+    group root
+    disabled
+    oneshot
+
+service klimt-art-log /system/bin/sh -c log=$$(/system/bin/logcat\ -b\ system\ -d\ -v\ raw\ -s\ odrefresh:I)\ ||\ exit\ 22;\
+        case\ \"$$log\"\ in\ *\"ART\ APEX\ version\ 350090000\"*)\ version=1\ ;;\ *)\ version=0\ ;;\ esac;\
+        case\ \"$$log\"\ in\ *\"Boot\ images\ on\ /system\ OK\ (arm)\"*)\ boot=ok\ ;;\ *\"Incomplete\ primary\ boot\ image\ or\ framework\ extension\ on\ /system:\"*)\ boot=missing_primary\ ;;\ *\"Incomplete\ boot\ image\ mainline\ extension\ on\ /system:\"*)\ boot=missing_mainline\ ;;\ *\"Checking\ boot\ images\ /data\ (arm)\"*)\ boot=system_ineligible\ ;;\ *)\ boot=unknown\ ;;\ esac;\
+        case\ \"$$log\"\ in\ *\"system_server\ artifacts\ on\ /system\ OK\"*)\ server=ok\ ;;\ *\"Incomplete\ system\ server\ artifacts\ on\ /system:\"*)\ server=incomplete\ ;;\ *)\ server=unchecked\ ;;\ esac;\
+        system=$$(printf\ '%s\\n'\ \"$$log\"\ |\ /system/bin/toybox\ grep\ -m\ 1\ -E\ \"System\ property\ .*non-default\ value|Userfaultfd\ GC\ check\ failed|Updated\ .*APEX.*mounted|Incomplete\ .*\ on\ /system\"\ |\ /system/bin/toybox\ cut\ -c1-85);\
+        cache=$$(printf\ '%s\\n'\ \"$$log\"\ |\ /system/bin/toybox\ grep\ -m\ 1\ -E\ \"No\ prior\ cache-info\ file|Failed\ to\ (load|parse).*cache-info\"\ |\ /system/bin/toybox\ cut\ -c1-85);\
+        /system/bin/setprop\ debug.klimt_art_system\ \"$$system\"\ ||\ exit\ 23;\
+        /system/bin/setprop\ debug.klimt_art_cache\ \"$$cache\"\ ||\ exit\ 24;\
+        /system/bin/setprop\ debug.klimt_art_log\ \"version=$$version,boot=$$boot,server=$$server\"
+    user shell
+    group shell log readproc
+    seclabel u:r:shell:s0
+    disabled
+    oneshot
+
+
+service klimt-cache /system/bin/sh -c "exec /apex/com.android.art/bin/odrefresh --compile"
+    seclabel u:r:su:s0
+    user root
+    group root
+    disabled
+    oneshot
+
+service klimt-cache-recheck /system/bin/sh -c "exec /apex/com.android.art/bin/odrefresh --check"
+    seclabel u:r:su:s0
+    user root
+    group root
+    disabled
+    oneshot
+
+service zygote /system/bin/app_process -Xzygote /system/bin --zygote --start-system-server --enable-lazy-preload
+    class main
+    priority -20
+    user root
+    group root readproc reserved_disk
+    socket zygote stream 660 root system
+    socket usap_pool_primary stream 660 root system
+    task_profiles ProcessCapacityHigh
+    disabled
+    oneshot
+
+service klimt-zygote-log /system/bin/sh -c /system/bin/toybox\ sleep\ 16;\
+        log=$$(/system/bin/logcat\ -b\ system\ -b\ main\ -d\ -v\ raw\ -s\ SystemServer:I\ Zygote:I\ AndroidRuntime:E\ art:I)\ ||\ exit\ 22;\
+        case\ \"$$log\"\ in\ *\"Entered\ the\ Android\ system\ server!\"*)\ server=entered\ ;;\ *)\ server=unconfirmed\ ;;\ esac;\
+        case\ \"$$log\"\ in\ *\"System\ server\ process\ \"*\"has\ been\ created\"*)\ fork=1\ ;;\ *)\ fork=0\ ;;\ esac;\
+        failure=$$(printf\ '%s\\n'\ \"$$log\"\ |\ /system/bin/toybox\ grep\ -m\ 1\ -Ei\ \"exception|failure|failed|abort\"\ |\ /system/bin/toybox\ cut\ -c1-85);\
+        /system/bin/setprop\ debug.klimt_zygote_detail\ \"$$failure\"\ ||\ exit\ 23;\
+        /system/bin/setprop\ debug.klimt_zygote_log\ \"server=$$server,fork=$$fork\"
+    user shell
+    group shell log readproc
+    seclabel u:r:shell:s0
+    disabled
+    oneshot
