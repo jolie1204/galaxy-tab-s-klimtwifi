@@ -1,0 +1,14 @@
+--- a/system/bin/klimt-framework-poll.sh
++++ b/system/bin/klimt-framework-poll.sh
+@@ -183,2 +183,6 @@
+-    if timeout 25 /system/bin/screencap -d "$display_id" "$capture" &&
+-        timeout 12 /system/bin/klimt-frame-probe "$capture"; then
++    capture_error=$(timeout 55 /system/bin/screencap -q -d "$display_id" "$capture" 2>&1)
++    capture_status=$?
++    capture_detail=$(printf '%s\n' "$capture_error" | /system/bin/toybox tail -n 1 |
++        /system/bin/toybox cut -c1-45)
++    "$property" debug.klimt_diag_35 "SCALED_CAPTURE status=$capture_status ${capture_detail:-none}"
++    if [ "$capture_status" = 0 ] && timeout 12 /system/bin/klimt-frame-probe "$capture"; then
+@@ -188 +192 @@
+-            capture=2560x1600,format=*,lit=[1-9]*|capture=1600x2560,format=*,lit=[1-9]*)
++            capture=640x400,format=*,lit=[1-9]*|capture=400x640,format=*,lit=[1-9]*)

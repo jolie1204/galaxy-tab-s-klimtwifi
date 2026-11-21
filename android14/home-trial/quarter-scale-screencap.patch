@@ -1,0 +1,10 @@
+--- a/cmds/screencap/screencap.cpp
++++ b/cmds/screencap/screencap.cpp
+@@ -161 +161 @@
+-    while ((c = getopt_long(argc, argv, "phd:", LONG_OPTIONS, nullptr)) != -1) {
++    while ((c = getopt_long(argc, argv, "pqhd:", LONG_OPTIONS, nullptr)) != -1) {
+@@ -164,0 +165,4 @@
++                break;
++            case 'q':
++                captureArgs.frameScaleX = 0.25f;
++                captureArgs.frameScaleY = 0.25f;

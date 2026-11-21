@@ -149,3 +149,22 @@ Linux requested recovery at 709.603 seconds. Fresh TWRP returned by software at 
 On the real SM-T700, Android finished booting at 172.403 seconds. Both wizard package states and the preferred Trebuchet default were verified by 224.822 seconds. The actual Home activity resumed at 227.153 seconds. At first its window focus was null. WindowManager later identified Trebuchet as the focused window at 471.614 and 634.790 seconds. SurfaceFlinger confirmed physical HWC display 0 and `powerMode=On` in both samples. Both full-resolution native screen captures returned failure while that Home session was active. The independent pixel readback remained outstanding.
 
 Linux requested software recovery at 709.966 seconds. Existing TWRP returned at 06:49:31 PST. Complete Vulkan BOOT and original RECOVERY, three retained console reads and the clean SYSTEM and EFS payloads verified. The optional software-Canvas launcher stayed off the device because the installed launcher acquired real focus. The next comparison keeps the verified Home configuration and reduces only the requested dimensions of the diagnostic screen capture.
+
+## Trial 69
+
+[The AOSP screencap patch](quarter-scale-screencap.patch) adds the optional `-q` flag in `frameworks/base`. It requests one quarter of each measured logical display dimension through Android's regular physical-display capture. Compile the platform ARM executable with the same linker dependencies and interpreter as the original. [The matching polling patch](quarter-scale-home-frame.patch) applies after trial 67 and keeps the same setup and render configuration. The raw frame validator requires a complete RGBA or RGBX payload and counts actual RGB values. Both patch replays, shell syntax, enforcing ARM USB and buffer allocation, and positive and negative frame guard cases passed.
+
+The SM-T700 used the full verified Linux 6.12.118 BOOT and the read-only removable Android 14 system. SELinux remained enforcing and Android app data lived in RAM. The live ACM report captured the following observations. The final five observations came from one polling cycle.
+
+| Kernel uptime | Verified on the tablet |
+| --- | --- |
+| 176.509 s | `sys.boot_completed=1` with activity, package, window and SurfaceFlinger Binder services reported |
+| 534.800 s | Trebuchet `com.android.launcher3/.uioverrides.QuickstepLauncher` resumed |
+| 535.356 s | WindowManager focus matched the same Trebuchet component |
+| 536.203 s | SurfaceFlinger reported internal HWC display 0 |
+| 536.293 s | Internal display `powerMode=On` |
+| 544.429 s | Native `screencap` returned a 400×640 RGBA frame with 256,000 nonblack RGB pixels |
+
+[The evidence checker](verify-home-evidence.py) requires boot completion, matching launcher and window focus, physical HWC display On, and a nonblack frame in the same polling cycle. The first reduced capture returned successfully but did not pass the frame verification step. The repeat produced the accepted physical Home frame. The measurement is a quarter-scale capture of the portrait display. The diagnostic retains the pixel count and discards the raw frame after validation. An installable firmware build, sustained performance checks and peripheral testing remain open.
+
+The kernel requested recovery at 709.612 seconds. The existing TWRP returned by software at 07:04:56 PST. The verification markers match in the live USB and retained kernel consoles. The three retained reads match, the complete BOOT and original RECOVERY match, and the internal SYSTEM and EFS payloads are unchanged beyond their ext4 mount metadata block. Both filesystems reported clean. Keep the original installed Android BOOT and the previous removable screenshot tool and poll for rollback. The tablet finished the test in TWRP.
