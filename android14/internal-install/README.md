@@ -44,6 +44,19 @@ The physical Linux 6.12.118 trial detected the Synaptics S5707 at I2C address 0x
 
 The panel identified itself as `42:11:03`, applied the 105-nit calibration and reported DCS power mode `0x9c`. Android reported boot completion at 124.177 seconds and resumed Google Welcome. At 438.041 seconds the trial requested recovery, and TWRP returned with a new boot ID. Full BOOT and original RECOVERY hashes matched again.
 
-For a future diagnostic build, [the corrected capture service](panel-capture.rc) can be appended to the test's Android init configuration. It addresses expansion of the former shell variable by init before the shell was launched. The updated script passed Android's host init verifier and a shell syntax check. The installed trial used the earlier version and yielded no Android screenshot.
+This early boot used an inline capture command whose shell variable was expanded by Android init, and the capture service exited before running the shell. The later trial uses a small init hook and an ordinary shell script.
 
 A second boot with the same BOOT hash was observed using an external camera. Android reported boot completion at 123.623 seconds and Google Welcome resumed at 131.249 seconds. The camera showed the navigation triangle and a black main area while Welcome remained active. The second trial also returned to TWRP by software. The new recovery boot ID, matching partition digests and visible recovery menu were verified. The camera evidence and raw console remain private.
+
+
+## Paired Android capture, external camera and Synaptics trace
+
+Build the timed diagnostic with [the init hook](panel-capture.rc). It launches [the observer](observe-setup.sh) as the Android shell after boot completion. The trial stages the shell file in `/data/local/tmp/klimt-setup-observe.sh`, owned by UID/GID 2000 with mode 0600. The hook restores the Android label. The observer requires the Synaptics S5707 as the input source, counts position and contact events, and records a native frame while Google Welcome is the resumed activity. The diagnostic continues to request TWRP after 420 seconds.
+
+The packed trial kept the previous kernel code, device tree, timings and boot layout. Its unchanged-size CPIO replacement updated only the Android init file. All three ARM handoff replays passed with the updated archive. Host init verification and the shell syntax check passed, and the fixture verified the capture gate and event counter.
+
+At 169.978 seconds the physical SM-T700 saved a verified 400×640 native capture. The matching camera frame showed the same Back triangle and black main area. The native frame's central rectangle was entirely black. Android reported Google Welcome as the focused app, with `mCurrentFocus=null`. Its scoped window and layer dumps yielded no matching Welcome entry at that point. A fresh TWRP boot and both partition digests were verified after the timed return.
+
+The replay with the same BOOT reproduced the black native center while Google Welcome was the focused app and current focus was null. A later WindowManager sample selected a Bluetooth application error dialog. The observations establish that the black area was present in Android's composed frame. The cause inside the app/window path remains open.
+
+The first input sample returned zero position and tracking events. The owner reported a tap without a verified contact timestamp. The longer replay reached init's 155-second service limit and left its final counter empty. The updated observer keeps the input timeout below that service deadline and writes a checkpoint on the first complete position report. These changes passed the host fixture. Physical touch delivery remains unverified. Both runs returned automatically to fresh TWRP with the expected BOOT and original RECOVERY digests.
