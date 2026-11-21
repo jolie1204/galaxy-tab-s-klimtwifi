@@ -1,0 +1,76 @@
+--- a/klimt-framework.rc
++++ b/klimt-framework.rc
+@@ -1,6 +1,7 @@
+ import /system/etc/init/logd.rc
+ import /system/etc/init/installd.rc
+ import /system/etc/init/idmap2d.rc
++import /vendor/etc/init/android.hardware.graphics.allocator@4.0-service.rc
+ 
+ on early-init
+     export ANDROID_BOOTLOGO 1
+@@ -29,6 +30,10 @@
+     copy /dev/cpuset/cpus /dev/cpuset/foreground/cpus
+     copy /dev/cpuset/mems /dev/cpuset/foreground/mems
+     chown system system /dev/cpuset/foreground/cgroup.procs
++    mkdir /dev/cpuset/system-background
++    copy /dev/cpuset/cpus /dev/cpuset/system-background/cpus
++    copy /dev/cpuset/mems /dev/cpuset/system-background/mems
++    chown system system /dev/cpuset/system-background/cgroup.procs
+     start ueventd
+     exec_start apexd-bootstrap
+     perform_apex_config --bootstrap
+@@ -124,14 +129,22 @@
+     start vndservicemanager
+     start installd
+     start idmap2d
++    restorecon_recursive /dev/dri
++    start vendor.graphics.allocator-4-0
+     start vendor.hwcomposer-2-1
++    exec_start klimt-vk-probe
+     start surfaceflinger
+     start zygote
+     exec_start klimt-zygote-log
+     exec_start klimt-display-log
+-    write /dev/kmsg "KLIMT-DISPLAY ${ro.boot.klimt_trial} hwsm=${hwservicemanager.ready:-unset} hwc=${init.svc.vendor.hwcomposer-2-1:-unset} sf=${init.svc.surfaceflinger:-unset} binder=${debug.klimt_framework_binder:-unset}"
++    write /dev/kmsg "KLIMT-DISPLAY ${ro.boot.klimt_trial} hwsm=${hwservicemanager.ready:-unset} alloc=${init.svc.vendor.graphics.allocator-4-0:-unset} hwc=${init.svc.vendor.hwcomposer-2-1:-unset} sf=${init.svc.surfaceflinger:-unset} binder=${debug.klimt_framework_binder:-unset}"
+     write /dev/kmsg "KLIMT-DISPLAY HWC ${debug.klimt_hwc_error:-unreported}"
+     write /dev/kmsg "KLIMT-DISPLAY SF ${debug.klimt_sf_error:-unreported}"
++    write /dev/kmsg "KLIMT-DISPLAY VULKAN ${debug.klimt_vk_error:-unreported}"
++    write /dev/kmsg "KLIMT-DISPLAY VKPROBE ${debug.klimt_vk_probe:-unreported}"
++    write /dev/kmsg "KLIMT-DISPLAY VKLOAD ${debug.klimt_vk_load:-unreported}"
++    write /dev/kmsg "KLIMT-DISPLAY VKDEVICE ${debug.klimt_vk_device:-unreported}"
++    write /dev/kmsg "KLIMT-DISPLAY VKLOCATION ${debug.klimt_vk_location:-unreported}"
+     write /dev/kmsg "KLIMT-FRAMEWORK INSTALLD state=${init.svc.installd:-unset} detail=${debug.klimt_installd_error:-unreported}"
+     write /dev/kmsg "KLIMT-ZYGOTE DETAIL ${ro.boot.klimt_trial} ${debug.klimt_zygote_detail:-unreported}"
+     write /dev/kmsg "KLIMT-ZYGOTE END ${ro.boot.klimt_trial} log=${debug.klimt_zygote_log:-unset}"
+@@ -250,8 +263,18 @@
+     oneshot
+ 
+ service klimt-display-log /system/bin/sh -c hwc=$$(/system/bin/logcat\ -b\ main\ -b\ system\ -d\ -v\ raw\ -s\ hwcomposer:W\ ComposerHal:W\ android.hardware.graphics.composer@2.1-service:W\ |\ /system/bin/toybox\ grep\ -m\ 1\ -v\ ^---------\ |\ /system/bin/toybox\ cut\ -c1-86);\
+-        sf=$$(/system/bin/logcat\ -b\ main\ -b\ system\ -d\ -v\ raw\ -s\ SurfaceFlinger:W\ EGL:W\ libEGL:W\ |\ /system/bin/toybox\ grep\ -m\ 1\ -v\ ^---------\ |\ /system/bin/toybox\ cut\ -c1-86);\
++        sf=$$(/system/bin/logcat\ -b\ main\ -b\ system\ -d\ -v\ raw\ -s\ SurfaceFlinger:W\ EGL:W\ libEGL:W\ ANGLE:W\ Vulkan:W\ |\ /system/bin/toybox\ grep\ -m\ 1\ -v\ ^---------\ |\ /system/bin/toybox\ cut\ -c1-86);\
+         installd=$$(/system/bin/logcat\ -b\ main\ -b\ system\ -d\ -v\ raw\ -s\ installd:W\ |\ /system/bin/toybox\ grep\ -m\ 1\ -v\ ^---------\ |\ /system/bin/toybox\ cut\ -c1-86);\
++        vk=$$(/system/bin/logcat\ -b\ main\ -b\ system\ -d\ -v\ raw\ -s\ SurfaceFlinger:W\ libEGL:W\ ANGLE:W\ vulkan:V\ loader:W\ linker:W\ |\ /system/bin/toybox\ grep\ -m\ 1\ -Ei\ \"VK_ERROR|failed\ to\ (load|open)|Internal\ Vulkan\ error\"\ |\ /system/bin/toybox\ sed\ -E\ \"s/^.*(Internal\ Vulkan\ error|VK_ERROR)/\\1/\"\ |\ /system/bin/toybox\ cut\ -c1-86);\
++        /system/bin/setprop\ debug.klimt_vk_error\ \"$$vk\";\
++        p=$$(/system/bin/logcat\ -b\ main\ -d\ -v\ raw\ -s\ KlimtVulkan:I\ |\ /system/bin/toybox\ grep\ -m\ 1\ -E\ \"vkCreateInstance|Vulkan\ renderer\"\ |\ /system/bin/toybox\ cut\ -c1-86);\
++        l=$$(/system/bin/logcat\ -b\ main\ -d\ -v\ raw\ -s\ KlimtVulkan:I\ |\ /system/bin/toybox\ grep\ -m\ 1\ -E\ \"SPHAL\ pastel|SPHAL\ loaded|Absolute\ pastel\"\ |\ /system/bin/toybox\ cut\ -c1-86);\
++        device=$$(/system/bin/logcat\ -b\ main\ -d\ -v\ raw\ -s\ KlimtVulkan:I\ |\ /system/bin/toybox\ grep\ -m\ 1\ -F\ \"Vulkan\ renderer\"\ |\ /system/bin/toybox\ cut\ -c1-86);\
++        location=$$(/system/bin/logcat\ -b\ main\ -d\ -v\ raw\ -s\ ANGLE:W\ libEGL:W\ |\ /system/bin/toybox\ grep\ -m\ 1\ -F\ \"Internal\ Vulkan\ error\"\ |\ /system/bin/toybox\ sed\ -E\ \"s/^.*implementation-specific.*,[[:space:]]*in[[:space:]]*//\"\ |\ /system/bin/toybox\ cut\ -c1-86);\
++        /system/bin/setprop\ debug.klimt_vk_device\ \"$$device\";\
++        /system/bin/setprop\ debug.klimt_vk_location\ \"$$location\";\
++        /system/bin/setprop\ debug.klimt_vk_probe\ \"$$p\";\
++        /system/bin/setprop\ debug.klimt_vk_load\ \"$$l\";\
+         /system/bin/setprop\ debug.klimt_hwc_error\ \"$$hwc\"\ ||\ exit\ 23;\
+         /system/bin/setprop\ debug.klimt_sf_error\ \"$$sf\"\ ||\ exit\ 24;\
+         /system/bin/setprop\ debug.klimt_installd_error\ \"$$installd\"
+@@ -289,3 +312,10 @@
+     capabilities SYS_NICE
+     disabled
+     oneshot
++
++service klimt-vk-probe /system/bin/klimt-vulkan-probe
++    user shell
++    group shell log
++    seclabel u:r:shell:s0
++    disabled
++    oneshot
