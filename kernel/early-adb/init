@@ -47,17 +47,31 @@ while [ "$(cat functions/ffs.adb/ready)" != 1 ]; do
     sleep 0.1
 done
 mark "FunctionFS ready"
+mark "waiting for tablet USB controller"
+bind_failed=0
 while :; do
     kill -0 "$daemon" || park "adbd exited before UDC bind"
     for port in /sys/class/udc/*; do
         [ -e "$port" ] || continue
         case "$(readlink -f "$port")" in
-            */12000000.usb/*) printf '%s\n' "${port##*/}" >UDC; break 2 ;;
+            */12000000.usb/*)
+                if printf '%s\n' "${port##*/}" >UDC; then
+                    break 2
+                fi
+                if [ "$bind_failed" -eq 0 ]; then
+                    mark "UDC bind failed; retrying"
+                    bind_failed=1
+                fi
+                sleep 1
+                ;;
         esac
     done
     sleep 0.1
 done
 mark "UDC bound"
+if dmesg > /tmp/early-kernel.log.tmp; then
+    mv /tmp/early-kernel.log.tmp /tmp/early-kernel.log || :
+fi
 wait "$daemon" || :
 printf '\n' >UDC
 park "adbd exited"

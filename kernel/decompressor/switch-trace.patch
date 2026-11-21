@@ -1,0 +1,51 @@
+--- a/arch/arm/boot/compressed/head.S
++++ b/arch/arm/boot/compressed/head.S
+@@ -633,2 +633,4 @@
+- */
+-		mov	r0, r4
++ */
++		mov	r6, #1
++		bl	.Lklimt_walk_record
++		mov	r0, r4
+@@ -921,2 +923,19 @@
+-.Lklimt_pre_tlbi_done:
+-		tst	r11, #0xf		@ restore VMSA predicate
++.Lklimt_pre_tlbi_done:
++		/* Only the first cache_on call has scratch r9 and a known return PC. */
++		tst	r11, #0xf
++		beq	.Lklimt_ready_done
++		adr_l	r0, .Lklimt_cache_return
++		cmp	r12, r0
++		bne	.Lklimt_ready_done
++		sub	r0, r4, #16384
++		cmp	r0, r3			@ require an exactly aligned destination
++		bne	.Lklimt_ready_done
++		mov	r9, r3
++		bl	.Lklimt_entry_fn	@ validates incoming translations and signature
++.Lklimt_ready_return:
++		mov	r3, r9
++		add	r4, r3, #16384
++		adr_l	r12, .Lklimt_cache_return
++		mrc	p15, 0, r11, c0, c1, 4	@ restore ID_MMFR0 for the stock path
++.Lklimt_ready_done:
++		tst	r11, #0xf		@ restore VMSA predicate
+@@ -945,2 +964,11 @@
+-		isb
+-.Lklimt_switch_done:
++		isb
++		adr_l	r2, .Lklimt_cache_return
++		cmp	r12, r2
++		bne	.Lklimt_switch_done
++		mov	r5, r0			@ pending SCTLR
++		mov	r6, #0
++		bl	.Lklimt_walk_record
++		mrc	p15, 0, r3, c2, c0, 0	@ restore the table pointer programmed above
++		mov	r0, r5
++		adr_l	r12, .Lklimt_cache_return
++.Lklimt_switch_done:
+@@ -1492,2 +1520,3 @@
+-#include "cache-bracket.inc"
+-
++#include "cache-bracket.inc"
++#include "switch-record.inc"
++

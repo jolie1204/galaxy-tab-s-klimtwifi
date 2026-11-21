@@ -6,7 +6,7 @@ import struct
 from pathlib import Path
 
 
-def check(boot, zimage, dtb, expanded_size):
+def check(boot, zimage, dtb, expanded_size, ordered_switch=False):
     if len(boot) > 8 << 20 or len(boot) < 2048 or boot[:8] != b'ANDROID!':
         raise ValueError('expected an Android boot image that fits the 8 MiB BOOT partition')
     ks, ka, rs, ra, second, _, tags, page, version = struct.unpack_from('<9I', boot, 8)
@@ -20,11 +20,14 @@ def check(boot, zimage, dtb, expanded_size):
         raise ValueError('inconsistent appended DTB bounds')
     if b'samsung,klimt-wifi\x00' not in dtb:
         raise ValueError('the appended DTB lacks the SM-T700 compatible string')
-    # TTBR0 write, unified TLB invalidate, DACR write in the ARMv7 decompressor.
-    transition = struct.pack('<III', 0x1e023f10, 0x1e080f17, 0x1e031f10)
+    # The two SM-T700 wrappers have distinct ARM-state table-switch sequences.
+    legacy = struct.pack('<III', 0x1e023f10, 0x1e080f17, 0x1e031f10)
+    ordered = struct.pack('<7I', 0xee023f10, 0xee031f10, 0xee026f50, 0xf57ff06f,
+                          0xee080f17, 0xf57ff04f, 0xf57ff06f)
+    accepted = (ordered,) if ordered_switch else (legacy, ordered)
     wrapper = zimage[:4096]
-    if not any(wrapper[i:i + len(transition)] == transition for i in range(0, len(wrapper), 4)):
-        raise ValueError('S-BOOT TLB invalidation missing from the ARMv7 table switch')
+    if not any(wrapper.startswith(seq, i) for i in range(0, len(wrapper), 4) for seq in accepted):
+        raise ValueError('expected SM-T700 ARMv7 table-switch sequence missing')
     rd_start = (page + ks + page - 1) // page * page
     trailer = (rd_start + rs + page - 1) // page * page
     if not rs or boot[trailer:] != b'SEANDROIDENFORCE':
@@ -54,12 +57,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--android', action='store_true',
                         help='require the SM-T700 Android firmware node for first-stage init')
+    parser.add_argument('--ordered-switch', action='store_true',
+                        help='require TTBR0/DACR/TTBCR synchronization and completed TLBI')
     for name in ('boot', 'zImage', 'dtb', 'Image'):
         parser.add_argument(name, type=Path)
     args = parser.parse_args()
     data = args.boot.read_bytes()
     try:
-        size = check(data, args.zImage.read_bytes(), args.dtb.read_bytes(), args.Image.stat().st_size)
+        size = check(data, args.zImage.read_bytes(), args.dtb.read_bytes(), args.Image.stat().st_size,
+                     ordered_switch=args.ordered_switch)
         if args.android:
             from android_firmware import require_android_dtb
             require_android_dtb(args.dtb)

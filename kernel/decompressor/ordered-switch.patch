@@ -1,0 +1,52 @@
+--- a/arch/arm/boot/compressed/head.S
++++ b/arch/arm/boot/compressed/head.S
+@@ -898,5 +898,26 @@
+-		mov	r0, #0
+-		mcr	p15, 0, r0, c7, c10, 4	@ drain write buffer
+-		tst	r11, #0xf		@ VMSA
+-		mcrne	p15, 0, r0, c8, c7, 0	@ flush I,D TLBs
+-#endif
++		/* S-BOOT can enter with a live D-cache and a noncoherent table walker. */
++		tst	r11, #0xf
++		beq	.Lklimt_table_ordered
++		mrc	p15, 0, r0, c1, c0, 0
++		tst	r0, #4
++		beq	.Lklimt_table_ordered
++		dcache_line_size r1, r2
++		mov	r0, r3
++		add	r2, r3, #16384
++.Lklimt_clean_table:
++		mcr	p15, 0, r0, c7, c10, 1	@ clean descriptor line to PoC
++		add	r0, r0, r1
++		cmp	r0, r2
++		blo	.Lklimt_clean_table
++.Lklimt_table_ordered:
++		dsb	sy
++		tst	r11, #0xf
++		beq	.Lklimt_pre_tlbi_done
++		mrc	p15, 0, r0, c1, c0, 0
++		tst	r0, #1			@ retain a live S-BOOT translation until switch
++		bne	.Lklimt_pre_tlbi_done
++		mcr	p15, 0, r0, c8, c7, 0
++		dsb	sy
++.Lklimt_pre_tlbi_done:
++		tst	r11, #0xf		@ restore VMSA predicate
++#endif
+@@ -916,6 +937,11 @@
+-		bic     r6, r6, #(7 << 0) | (1 << 4)	@ use only ttbr0
+-		mcrne	p15, 0, r3, c2, c0, 0	@ load page table pointer
+-		mcrne	p15, 0, r0, c8, c7, 0	@ flush I,D TLBs
+-		mcrne	p15, 0, r1, c3, c0, 0	@ load domain access control
+-		mcrne   p15, 0, r6, c2, c0, 2   @ load ttb control
+-#endif
++		bic     r6, r6, #(7 << 0) | (1 << 4)	@ use only ttbr0
++		beq	.Lklimt_switch_done
++		mcr	p15, 0, r3, c2, c0, 0	@ TTBR0
++		mcr	p15, 0, r1, c3, c0, 0	@ DACR
++		mcr	p15, 0, r6, c2, c0, 2	@ TTBCR
++		isb
++		mcr	p15, 0, r0, c8, c7, 0	@ discard translations from the previous context
++		dsb	sy
++		isb
++.Lklimt_switch_done:
++#endif

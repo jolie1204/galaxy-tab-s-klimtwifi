@@ -92,7 +92,7 @@ def macro(name, message, base):
     emit_record(message)
 
 
-def cache_bracket_records(run_id, table_checkpoint=False):
+def cache_bracket_records(run_id, table_checkpoint=False, switch=False):
     for name, stage, clean in [('write_at_entry', 'ENTRY', True),
                                ('write_before_cache', 'PRECACHE', True),
                                ('write_after_cache', 'POSTCACHE', False)]:
@@ -101,9 +101,25 @@ def cache_bracket_records(run_id, table_checkpoint=False):
     if table_checkpoint:
         print(".macro write_table_ready")
         emit_record(f'KLIMT-612-TABLEBUILT {run_id}', clean=True)
-    # Both callers use the same guarded writer. Its return address
+    if switch:
+        for name, stage, clean in [('write_pt_ready', 'PTREADY', True),
+                                   ('write_live_table', 'TTBRLIVE', False),
+                                   ('write_before_inflate', 'PREINFLATE', False)]:
+            print(f".macro {name}")
+            emit_record(f'KLIMT-612-{stage} {run_id}', clean)
+    # Callers use the same guarded writer. Its return address
     # identifies the call site without using a stack or a live register.
     print(".macro write_cached_record")
+    if switch:
+        print("""    adr r1, 6f
+    ldr r2, [r1]
+    add r1, r1, r2
+    cmp lr, r1
+    bne 7f
+    write_pt_ready
+    b 3f
+6:  .word .Lklimt_ready_return - 6b
+7:""")
     if table_checkpoint:
         print("""    adr r1, 4f
     ldr r2, [r1]
@@ -140,14 +156,18 @@ if __name__ == '__main__':
                       help='also mark the first call to cache_on and its return on SM-T700')
     mode.add_argument('--cache-table-run', metavar='HEX_ID',
                       help='also mark completion of page table construction before switching TTBR0')
+    mode.add_argument('--switch-run', metavar='HEX_ID',
+                      help='include table visibility, live translation and pre-inflate records')
     args = parser.parse_args()
     run_id = next((value for value in (args.cached_vendor_run, args.cached_612_run,
-                                       args.cache_bracket_run, args.cache_table_run) if value is not None), None)
+                                       args.cache_bracket_run, args.cache_table_run, args.switch_run) if value is not None), None)
     if run_id is not None:
         if not re.fullmatch(r'[0-9a-f]{16}', run_id):
             parser.error('expected sixteen lowercase hexadecimal digits')
         print(f".equ KLIMT_DATA_ECC, {FIRST_PARITY}\n.equ KLIMT_HEADER_ECC, {SIZE - ECC}")
-        if args.cache_bracket_run is not None or args.cache_table_run is not None:
+        if args.switch_run is not None:
+            cache_bracket_records(run_id, table_checkpoint=True, switch=True)
+        elif args.cache_bracket_run is not None or args.cache_table_run is not None:
             cache_bracket_records(run_id, table_checkpoint=args.cache_table_run is not None)
         else:
             print(".macro write_cached_record")
