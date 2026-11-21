@@ -4,6 +4,23 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## Bootstrap APEX and linker configuration, trial 24
+
+On November 20, 2026, the installed Android 14 bootstrap service activated all three expected factory packages on the physical SM-T700 running Linux 6.12.118. Init then ran the dynamic linker configuration generator from the newly mounted runtime APEX. The experiment used the existing factory packages on read-only SYSTEM, the installed enforcing SELinux policy and a diagnostic RAM script. [Diagnostic sources and QEMU controls](../android14/apex-bootstrap-trial/README.md)
+
+| Kernel uptime | Physical observation |
+| --- | --- |
+| 5.953 s | All three manifest paths were absent in PID 1's mount namespace. The bootstrap linker configuration contained the stock one-byte placeholder. |
+| 9.822–9.839 s | Apexd mounted i18n version 1, tzdata version 350090000 and runtime version 1 from their preinstalled packages. |
+| 9.910 s | Apexd completed its bootstrap routine in 1,044 ms. PID 77 ran in enforcing `u:r:apexd:s0`. |
+| 10.026 s | Init reaped the same service with exit status 0. Init's total wait for the service was 3.941 s. |
+| 10.187–10.193 s | Init reported successful linker configuration generation. The file measured 6,430 bytes. Each unversioned package manifest resolved on a separate read-only ext4 loop device with its expected size. |
+| 16.482 s | The diagnostic requested a software restart to recovery. |
+
+Apexd enumerated 31 preinstalled packages and activated the three bootstrap packages. During startup the audit log recorded a denied read of the vendor GPS executable and denied devtmpfs writes. SELinux stayed enforcing throughout the successful trial. Full APEX activation, Android framework startup and interactive performance remain pending. The next bounded trial targets Binder IPC through the installed service manager.
+
+The physical ACM stream and three identical reads of the retained console agreed. A fresh TWRP 3.7.0_9-0 returned at 21:42:38 PST. The BOOT image was 7,538,704 bytes with SHA-256 `95343c452457cd74c8172de6e7fad6a84085a389cd31f6b6093832fc2987ac40`. The full 8 MiB BOOT readback matched `04eaf85ed105ec8263d10dfa4c59dbef0da9d715d10388bdb4bd422d33744ad0`, and RECOVERY retained its previous digest. On each of SYSTEM and EFS, six bytes differed, confined to primary ext4 mount/write times, mount count and lifetime writes. TWRP reported both filesystems clean.
+
 ## Ueventd coldboot and device nodes, trial 23
 
 On November 20, 2026, the installed Android 14 ueventd completed its coldboot device scan on the SM-T700 running Linux 6.12.118. Android's own wait for `ro.cold_boot_done` completed, allowing init to execute its next action. The trial used the stock executable and device rules; the RAM script started only the ueventd service. [Diagnostic source and controls](../android14/ueventd-coldboot-trial/README.md)
@@ -31,7 +48,7 @@ USB ACM captured 19,815 bytes. Three reads of the retained 32,221-byte console a
 
 Across the trial and TWRP return, SYSTEM and EFS each changed by six bytes in the primary ext4 superblock. Those bytes belong to mount time, write time, mount count and lifetime KiB written. Every byte past the first 4 KiB on each partition was covered by matching before/after digest comparisons. Both filesystems reported clean on return.
 
-The installed early-init script invokes `apexd-bootstrap` and `perform_apex_config --bootstrap` after starting ueventd. The next milestone is to verify early APEX activation and the resulting runtime paths. Android framework startup, the launcher and performance testing remain pending.
+The installed early-init script invokes `apexd-bootstrap` and `perform_apex_config --bootstrap` after starting ueventd. Trial 24 subsequently verified the early APEX activation and linker configuration. Android framework startup, the launcher and performance testing remain pending.
 
 ## Cgroups and the Android property service, trial 22
 
