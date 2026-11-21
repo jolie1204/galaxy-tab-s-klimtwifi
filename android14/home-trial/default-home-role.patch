@@ -1,0 +1,45 @@
+--- a/system/bin/klimt-framework-poll.sh
++++ b/system/bin/klimt-framework-poll.sh
+@@ -12 +12 @@
+-    /system/bin/toybox timeout -k 2 10 /system/bin/cmd package resolve-activity --brief --user 0 -a android.intent.action.MAIN -c android.intent.category.HOME -p com.android.launcher3 |
++    /system/bin/toybox timeout -k 2 10 /system/bin/cmd package resolve-activity --brief --user 0 -a android.intent.action.MAIN -c android.intent.category.HOME "$@" |
+@@ -90,2 +90,26 @@
+-            timeout 12 /system/bin/am force-stop --user 0 com.google.android.setupwizard
+-            home_profile_ready=1
++            setup_status=$(
++                for wizard in com.google.android.setupwizard org.lineageos.setupwizard; do
++                    timeout 18 /system/bin/cmd package disable-user --user 0 "$wizard"
++                done
++            )
++            disabled=0
++            case "$setup_status" in
++                *'Package com.google.android.setupwizard new state: disabled-user'*)
++                    disabled=$((disabled + 1)) ;;
++            esac
++            case "$setup_status" in
++                *'Package org.lineageos.setupwizard new state: disabled-user'*)
++                    disabled=$((disabled + 1)) ;;
++            esac
++            "$property" debug.klimt_diag_35 "RAM_WIZARDS disabled=$disabled/2"
++            if [ "$disabled" = 2 ]; then
++                target=$(resolve_launcher -p com.android.launcher3)
++                case "$target" in
++                    com.android.launcher3/.uioverrides.QuickstepLauncher|com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher)
++                        timeout 18 /system/bin/cmd package set-home-activity --user 0 "$target"
++                        default_home=$(resolve_launcher)
++                        "$property" debug.klimt_diag_35 "RAM_DEFAULT_HOME ${default_home:-unreported}"
++                        ;;
++                esac
++                home_profile_ready=1
++            fi
+@@ -105 +129 @@
+-        candidate=$(resolve_launcher)
++        candidate=$(resolve_launcher -p com.android.launcher3)
+@@ -108,0 +133,4 @@
++                case "${default_home:-}" in
++                    "$home"|com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher) set -- ;;
++                    *) set -- -p com.android.launcher3 ;;
++                esac
+@@ -110 +138 @@
+-                    -c android.intent.category.HOME -p com.android.launcher3 2>&1 |
++                    -c android.intent.category.HOME "$@" 2>&1 |
