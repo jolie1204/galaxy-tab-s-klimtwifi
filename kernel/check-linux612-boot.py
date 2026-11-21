@@ -2,20 +2,45 @@
 """Check the corrected SM-T700 BOOT against its Linux ARM build outputs."""
 import argparse
 import hashlib
+import lzma
 import struct
 from pathlib import Path
 
 
-def check(boot, zimage, dtb, expanded_size, ordered_switch=False):
+def check_zimage_bounds(zimage):
+    if len(zimage) < 0x30 or struct.unpack_from('<III', zimage, 0x24) != (0x016f2818, 0, len(zimage)):
+        raise ValueError('inconsistent ARM zImage bounds')
+
+
+def check_vendor_payload(outer, start, end, payload):
+    check_zimage_bounds(outer)
+    if not 0x30 <= start < end - 4 <= len(outer) - 4:
+        raise ValueError('invalid vendor input_data/input_data_end offsets')
+    if struct.unpack_from('<I', outer, end - 4)[0] != len(payload):
+        raise ValueError('vendor decompressor output-size trailer differs from the inner payload')
+    decoder = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE, memlimit=128 << 20)
+    try:
+        result = decoder.decompress(outer[start:end - 4], max_length=len(payload) + 1)
+    except lzma.LZMAError as error:
+        raise ValueError('invalid vendor LZMA stream') from error
+    if not decoder.eof or decoder.unused_data or result != payload:
+        raise ValueError('vendor LZMA stream differs from the expected inner zImage and DTB')
+
+
+def check(boot, zimage, dtb, expanded_size, ordered_switch=False, vendor_wrapper=None):
     if len(boot) > 8 << 20 or len(boot) < 2048 or boot[:8] != b'ANDROID!':
         raise ValueError('expected an Android boot image that fits the 8 MiB BOOT partition')
     ks, ka, rs, ra, second, _, tags, page, version = struct.unpack_from('<9I', boot, 8)
     if (ka, tags, page, version, second) != (0x10008000, 0x10000100, 2048, 0, 0):
         raise ValueError('unexpected SM-T700 kernel address, tags, page size or header format')
-    if ks != len(zimage) + len(dtb) or boot[page:page + ks] != zimage + dtb:
-        raise ValueError('BOOT kernel and appended DTB differ from the supplied build')
-    if len(zimage) < 0x30 or struct.unpack_from('<III', zimage, 0x24) != (0x016f2818, 0, len(zimage)):
-        raise ValueError('inconsistent ARM zImage bounds')
+    payload = zimage + dtb
+    if vendor_wrapper is not None:
+        outer, start, end = vendor_wrapper
+        check_vendor_payload(outer, start, end, payload)
+        payload = outer
+    if ks != len(payload) or boot[page:page + ks] != payload:
+        raise ValueError('BOOT kernel payload differs from the supplied build')
+    check_zimage_bounds(zimage)
     if len(dtb) < 40 or struct.unpack_from('>II', dtb) != (0xd00dfeed, len(dtb)):
         raise ValueError('inconsistent appended DTB bounds')
     if b'samsung,klimt-wifi\x00' not in dtb:
@@ -59,13 +84,19 @@ if __name__ == '__main__':
                         help='require the SM-T700 Android firmware node for first-stage init')
     parser.add_argument('--ordered-switch', action='store_true',
                         help='require TTBR0/DACR/TTBCR synchronization and completed TLBI')
+    parser.add_argument('--vendor-wrapper', nargs=3, metavar=('ZIMAGE', 'START', 'END'),
+                        help='verify the vendor zImage and its linked input_data offsets')
     for name in ('boot', 'zImage', 'dtb', 'Image'):
         parser.add_argument(name, type=Path)
     args = parser.parse_args()
     data = args.boot.read_bytes()
     try:
+        vendor = None
+        if args.vendor_wrapper:
+            outer, start, end = args.vendor_wrapper
+            vendor = (Path(outer).read_bytes(), int(start, 0), int(end, 0))
         size = check(data, args.zImage.read_bytes(), args.dtb.read_bytes(), args.Image.stat().st_size,
-                     ordered_switch=args.ordered_switch)
+                     ordered_switch=args.ordered_switch, vendor_wrapper=vendor)
         if args.android:
             from android_firmware import require_android_dtb
             require_android_dtb(args.dtb)

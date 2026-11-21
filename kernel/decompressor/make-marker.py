@@ -158,9 +158,12 @@ if __name__ == '__main__':
                       help='also mark completion of page table construction before switching TTBR0')
     mode.add_argument('--switch-run', metavar='HEX_ID',
                       help='include table visibility, live translation and pre-inflate records')
+    mode.add_argument('--vendor-wrapper-run', metavar='HEX_ID',
+                      help='mark vendor decompressor entry and its handoff to an inner zImage')
     args = parser.parse_args()
     run_id = next((value for value in (args.cached_vendor_run, args.cached_612_run,
-                                       args.cache_bracket_run, args.cache_table_run, args.switch_run) if value is not None), None)
+                                       args.cache_bracket_run, args.cache_table_run, args.switch_run,
+                                       args.vendor_wrapper_run) if value is not None), None)
     if run_id is not None:
         if not re.fullmatch(r'[0-9a-f]{16}', run_id):
             parser.error('expected sixteen lowercase hexadecimal digits')
@@ -171,9 +174,12 @@ if __name__ == '__main__':
             cache_bracket_records(run_id, table_checkpoint=args.cache_table_run is not None)
         else:
             print(".macro write_cached_record")
-            prefix = 'KLIMT-VENDOR-ENTRY ' if args.cached_vendor_run is not None else 'KLIMT-612-ENTRY '
+            vendor = args.cached_vendor_run is not None or args.vendor_wrapper_run is not None
+            prefix = 'KLIMT-VENDOR-ENTRY ' if vendor else 'KLIMT-612-ENTRY '
             emit_record(prefix + run_id, clean=True)
-        if args.cached_vendor_run is None:
+        if args.vendor_wrapper_run is not None:
+            macro('klimt_mark_handoff', 'KLIMT-VENDOR-HANDOFF ' + run_id, 0x40000000)
+        elif args.cached_vendor_run is None:
             macro('klimt_mark_inflated', 'KLIMT-612-INFLATED ' + run_id, 0x40000000)
     else:
         base = 0x4d000000 if args.qemu_virt else 0x40000000

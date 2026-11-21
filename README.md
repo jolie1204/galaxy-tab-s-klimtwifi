@@ -2,9 +2,9 @@
 
 **Galaxy Tab S 8.4 Wi-Fi SM-T700 전용입니다.** 실기에서 부팅을 확인한 비공식 LineageOS 21 ROM을 바탕으로 기본 앱 네 개를 뺀 TWRP 설치 ZIP을 만드는 스크립트입니다. 아래 빌드 절차와 실기 검증 기록을 참고하세요.
 
-Android 14 소스 빌드에는 삼성 부트로더용 Linux 6.12.118 수정과 램디스크 내장 BOOT를 준비했습니다. 별도 진단 이미지의 초기 ADB와 복구 타이머를 PC에서 검증했습니다. 새 이미지의 태블릿 부팅 시험은 남아 있습니다. [소스 빌드와 검증 기록](docs/android14-source.md#corrected-linux-612-boot-images-november-20)
+Android 14 소스 빌드에는 삼성 부트로더용 Linux 6.12.118 수정과 램디스크 내장 BOOT를 준비했습니다. 별도 Linux 6.12.118 진단 이미지는 SM-T700 실기에서 초기 사용자 공간까지 부팅해 USB ADB 인터페이스를 표시했습니다. USB 구성 선택에서 시간 초과가 발생했고, 인증된 ADB 셸과 6.12 기반 Android 14 부팅은 아직 확인되지 않았습니다. [소스 빌드와 검증 기록](docs/android14-source.md#corrected-linux-612-boot-images-november-20)
 
-The repacker takes one exact retiredtab LineageOS 21 full OTA, modifies its SYSTEM image offline, and rebuilds the TWRP ZIP with the original BOOT payload. The hardware-tested Slim ROM runs Android 14 (API 34) on the base ROM's Linux 3.4.113 kernel. Several patches listed in the maintainer's October build notes were unavailable during the trial, so the repacker uses the published OTA as its input. A separate Linux 6.12.118 diagnostic was written to BOOT for a hardware trial. [SM-T700 probe results](kernel/probe.md)
+The repacker takes one exact retiredtab LineageOS 21 full OTA, modifies its SYSTEM image offline, and rebuilds the TWRP ZIP with the original BOOT payload. The hardware-tested Slim ROM runs Android 14 (API 34) on the base ROM's Linux 3.4.113 kernel. Several patches listed in the maintainer's October build notes were unavailable during the trial, so the repacker uses the published OTA as its input. A separate Linux 6.12.118 RAM diagnostic reached USB userspace on the SM-T700. The host timed out selecting the ADB USB configuration. [Hardware trial and build details](kernel/decompressor/README.md#seventeenth-hardware-trial)
 
 | Removed from SYSTEM | Retained and checked |
 | --- | --- |

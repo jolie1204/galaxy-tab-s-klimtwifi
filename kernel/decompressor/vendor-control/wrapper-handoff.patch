@@ -1,0 +1,35 @@
+--- a/arch/arm/boot/compressed/head.S
++++ b/arch/arm/boot/compressed/head.S
+@@ -168,4 +168,6 @@
+-
+-		.text
+-
+-#ifdef CONFIG_AUTO_ZRELADDR
++
++		.text
++#include "cached-record.inc"
++		bl	.Lklimt_vendor_entry
++
++#ifdef CONFIG_AUTO_ZRELADDR
+@@ -460,4 +462,5 @@
+-		bl	cache_clean_flush
+-		bl	cache_off
+-		mov	r0, #0			@ must be zero
+-		mov	r1, r7			@ restore architecture number
++		bl	cache_clean_flush
++		bl	cache_off
++		klimt_mark_handoff
++		mov	r0, #0			@ must be zero
++		mov	r1, r7			@ restore architecture number
+@@ -465,4 +468,7 @@
+- ARM(		mov	pc, r4	)		@ call kernel
+- THUMB(		bx	r4	)		@ entry point is always ARM
+-
+-		.align	2
++ ARM(		mov	pc, r4	)		@ call kernel
++ THUMB(		bx	r4	)		@ entry point is always ARM
++
++.Lklimt_vendor_entry:
++#include "cached-entry.inc"
++
++		.align	2
