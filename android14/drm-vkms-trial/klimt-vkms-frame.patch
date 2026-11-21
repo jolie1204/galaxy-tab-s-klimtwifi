@@ -1,0 +1,43 @@
+--- a/klimt-framework.rc
++++ b/klimt-framework.rc
+@@ -1,6 +1,7 @@
+ import /system/etc/init/logd.rc
+ import /system/etc/init/installd.rc
+ import /system/etc/init/idmap2d.rc
++import /system/etc/init/bootanim.rc
+ import /vendor/etc/init/android.hardware.graphics.allocator@4.0-service.rc
+ 
+ on early-init
+@@ -117,6 +118,8 @@
+ 
+ on init && property:ro.boot.klimt_zygote=1
+     mkdir /data/app 0771 system system encryption=None
++    mkdir /data/local 0751 root root
++    mkdir /data/local/tmp 0771 shell shell
+     mkdir /data/misc/installd 0700 root root
+     mkdir /data/misc/user 0771 root root
+     mkdir /data/resource-cache 0771 system system encryption=None
+@@ -136,6 +139,8 @@
+     start surfaceflinger
+     start zygote
+     exec_start klimt-zygote-log
++    exec_start klimt-frame-capture
++    write /dev/kmsg "KLIMT-DISPLAY FRAME ${debug.klimt_frame:-unreported}"
+     exec_start klimt-display-log
+     write /dev/kmsg "KLIMT-DISPLAY ${ro.boot.klimt_trial} hwsm=${hwservicemanager.ready:-unset} alloc=${init.svc.vendor.graphics.allocator-4-0:-unset} hwc=${init.svc.vendor.hwcomposer-2-1:-unset} sf=${init.svc.surfaceflinger:-unset} binder=${debug.klimt_framework_binder:-unset}"
+     write /dev/kmsg "KLIMT-DISPLAY HWC ${debug.klimt_hwc_error:-unreported}"
+@@ -319,3 +324,14 @@
+     seclabel u:r:shell:s0
+     disabled
+     oneshot
++
++
++service klimt-frame-capture /system/bin/sh -c /system/bin/toybox\ timeout\ 35\ /system/bin/screencap\ /data/local/tmp/klimt-frame.raw\ ||\ exit\ 30;\
++        /system/bin/klimt-frame-probe\ /data/local/tmp/klimt-frame.raw;\ result=$$?;\
++        frame=$$(/system/bin/logcat\ -b\ main\ -d\ -v\ raw\ -s\ KlimtFrame:I\ |\ /system/bin/toybox\ grep\ -m\ 1\ -F\ capture=);\
++        /system/bin/setprop\ debug.klimt_frame\ \"$$frame\";\ exit\ $$result
++    user shell
++    group shell log readproc
++    seclabel u:r:shell:s0
++    disabled
++    oneshot

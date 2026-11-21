@@ -8,3 +8,11 @@ This trial runs the installed Android 14 framework with virtual KMS, ARM SwiftSh
 4. Compile [the Vulkan probe](vulkan-probe.c) for ARM with `armv7a-linux-androideabi34-clang -O2 -Wall -Wextra -Werror vulkan-probe.c -ldl -llog -lvulkan -o klimt-vulkan-probe`. Install it at `/system/bin/klimt-vulkan-probe` in the fixture with the stock shell executable context. Apply [the diagnostic RC patch](klimt-vkms.patch) over trial 30's RC, then rebuild the private virtual ramdisk with a fresh run ID.
 
 The initial ANGLE attempt found zero Vulkan physical devices. In the final comparison the standalone probe loaded the driver by name, created an instance and reported SwiftShader Device (LLVM 16.0.0). ARM QEMU recorded the hardware service manager, minigbm allocator and DRM composer running. SurfaceFlinger remained alive and was listed by Binder at uptime 114.412 s, under the same enforcing policy. The session returned to recovery at 121.174 s. Android Home, a composed frame and the device's internal display remain separate acceptance checks.
+
+## Native Android screen capture
+
+[The frame patch](klimt-vkms-frame.patch) starts the installed boot animation from SurfaceFlinger and invokes the stock `screencap` through the Android shell. Compile [the frame reader](frame-probe.c) the same way as the Vulkan probe with `-llog`, install it as `/system/bin/klimt-frame-probe` with the shell executable context, and preserve the frame as temporary RAM data.
+
+SwiftShader shader compilation required `execmem` for bootanim and surfaceflinger in this private emulator fixture. The comparison against the original policy found exactly those two additional self permissions and no changes to permissive domains. SELinux remained enforcing. Use this fixture-specific policy only to reproduce the software renderer trial. The physical tablet continued using its original policy. The virtual kernel guard was widened to 175 seconds and first-stage fallback to 195 seconds for ARM emulation.
+
+Stock Android `screencap` completed and the frame reader exited with status 0. At uptime 143.552 s the raw RGBA capture measured 1024×768 with 344 pixels whose RGB value was nonzero. The boot returned to recovery at 182.304 s. Launcher and the SM-T700 panel still require verification.
