@@ -1,0 +1,63 @@
+--- a/system/bin/klimt-framework-poll.sh
++++ b/system/bin/klimt-framework-poll.sh
+@@ -44,6 +44,22 @@
+     display=$(binder_ready SurfaceFlinger)
+     "$property" debug.klimt_home "step=$cycle,activity=$activity,package=$package,window=$window,sf=$display,boot=${boot:-unset}"
+     [ "$boot" = 1 ] || continue
++    if [ "$activity" = 0 ] && [ "${runtime_check_started:-0}" = 0 ]; then
++        runtime_check_started=1
++        (
++            timeout 15 /system/bin/logcat -b crash -d -v brief -s AndroidRuntime:E libc:F DEBUG:F |
++                /system/bin/toybox grep -E 'FATAL EXCEPTION|Fatal signal|Process:|Abort message:' |
++                /system/bin/toybox tail -n 5 |
++                {
++                    slot=21
++                    while IFS= read -r line; do
++                        detail=$(printf '%s' "$line" | /system/bin/toybox cut -c1-75)
++                        "$property" "debug.klimt_diag_$slot" "CRASH $detail"
++                        slot=$((slot + 1))
++                    done
++                }
++        ) &
++    fi
+     if [ "$(/system/bin/id -u)" != 2000 ] ||
+         ! /system/bin/awk '$5 == "/data" { for (i=6; i<NF; i++) if ($i == "-") { type=$(i+1); break } }
+             END { exit type != "tmpfs" }' /proc/self/mountinfo; then
+@@ -109,6 +125,12 @@
+         com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher) focus=$home ;;
+     esac
+     "$property" debug.klimt_focus "${focus:-unreported}"
++    if [ "$focus" != "$home" ]; then
++        window_marker=$(printf '%s
++' "$window_details" | /system/bin/toybox grep -m 1 'mCurrentFocus=' |
++            /system/bin/toybox cut -c1-70)
++        "$property" debug.klimt_diag_35 "WINDOW ${window_marker:-unreported}"
++    fi
+     if [ "$focus" != "$home" ] && [ "${wake_attempts:-0}" -lt 2 ]; then
+         timeout 10 /system/bin/input keyevent KEYCODE_WAKEUP
+         timeout 10 /system/bin/wm dismiss-keyguard
+@@ -122,7 +144,7 @@
+         /system/bin/toybox cut -c1-86)
+     "$property" debug.klimt_display_hwc "${physical:-unreported}"
+     "$property" debug.klimt_display_state "${active:-unreported}"
+-    [ "$focus" = "$home" ] && [ -n "$physical" ] && [ -n "$active" ] || continue
++    [ -n "$physical" ] && [ -n "$active" ] || continue
+     if [ "$(/system/bin/getprop init.svc.bootanim)" = running ] &&
+         [ "$(/system/bin/getprop service.bootanim.exit)" != 1 ]; then
+         continue
+@@ -136,9 +158,13 @@
+             /system/bin/toybox tail -n 1)
+         case "$details" in
+             capture=2560x1600,format=*,lit=[1-9]*|capture=1600x2560,format=*,lit=[1-9]*)
+-                "$property" debug.klimt_home_capture "$details"
+                 /system/bin/toybox rm -f "$capture"
+-                break ;;
++                if [ "$focus" = "$home" ]; then
++                    "$property" debug.klimt_home_capture "$details"
++                    break
++                fi
++                "$property" debug.klimt_diag_35 "DISPLAY_FRAME $details"
++                continue ;;
+         esac
+     fi
+     "$property" debug.klimt_home_capture failed
