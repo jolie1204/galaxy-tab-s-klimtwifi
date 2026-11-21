@@ -4,6 +4,10 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## Android 14 graphics dependency test on Linux 6.12
+
+[Trial 30](../android14/framework-display-trial/README.md) confirmed that installd and an enforcing Java system_server remained alive on the SM-T700. The legacy composer could not open the framebuffer. SurfaceFlinger reported EGL initialization failure and crashed before registering Binder. The tablet returned to TWRP by software. The [Exynos5420 DSIM resolution prerequisite](../kernel/klimt-display/README.md) compiled for ARM; MIC, panel scanout and Android composition remain open.
+
 ## Zygote and system_server, trial 29
 
 The November 20, 2026 SM-T700 trial used the installed Android 14 userspace on Linux 6.12.118 with userfaultfd enabled. It used an isolated tmpfs at /data and the installed enforcing SELinux policy. The standard Android early process limits and foreground cpuset restored Zygote's native scheduling setup. The diagnostic used Android's supported lazy preload option to observe the system_server fork without waiting for eager class preloading. [Source and verifier](../android14/zygote-trial/README.md)

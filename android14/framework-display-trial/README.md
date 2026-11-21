@@ -1,0 +1,11 @@
+# Android 14 framework and graphics dependencies on SM-T700
+
+Trial 30 started the installed hardware and vendor Binder service managers, installd, idmap2d, HWC 2.1, and SurfaceFlinger together with the existing enforcing Zygote flow. The trial kept /data in RAM and the internal MMC read-only. The diagnostic starts graphics services once and uses their own error logs, process state and Binder registration, followed by a bounded software return to TWRP.
+
+Apply [the diagnostic RC patch](klimt-framework.patch) to the [trial 29 RC](../zygote-trial/klimt-zygote.rc) when rebuilding the embedded diagnostic ramdisk. The patch applies with zero fuzz and regenerates the same ramdisk bytes. A control with `androidboot.klimt_zygote=0` skips the added services. Use a fresh shared ID in the outer and inner boot markers, ramdisk, and embedded bootconfig. Read the evidence with `python3 verify-framework-log.py [virtual|skipped|physical] RUN_ID CONSOLE`.
+
+ARM QEMU and the physical SM-T700 both kept installd running after creating the stock RAM data directories. The legacy composer exited after failing to open the framebuffer. SurfaceFlinger reported `EGL_NOT_INITIALIZED` and crashed with SIGSEGV while initializing the installed GLES RenderEngine. SurfaceFlinger did not register with Binder during the trial. On the tablet, Java SystemServer entered and both Zygote and system_server were alive in enforcing mode at 48.873 s. The recovery request appeared at 54.882 s. USB ACM and three retained-console reads agreed. No Home frame was produced.
+
+The 7,561,232-byte diagnostic BOOT image had SHA-256 `306418acfb80fca52d5263c1a616d3b9c186d05fe3b793f9245f7ca20898d00a`. All three packaged replays recovered identical kernel bytes. The full BOOT readback matched `140af424d65aad92a1a4b128f5247a4f299dc606a546f1b2ab1145d962cc3cba`. RECOVERY matched its previous digest. Comparing all SYSTEM and EFS blocks found only the six primary ext4 metadata byte changes on each seen in earlier TWRP trials. Both filesystems reported clean.
+
+The next display path uses a DRM composer with a compatible allocator and renderer. A VKMS test can verify Android composition in QEMU. Confirm the [SM-T700 panel pipeline](../../kernel/klimt-display/README.md) and physical display output on the tablet.
