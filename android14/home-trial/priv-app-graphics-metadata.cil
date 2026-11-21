@@ -1,0 +1,2 @@
+; Allows the observed priv_app receiver to map metadata exported by the graphics allocator.
+(allow priv_app hal_graphics_allocator_default_tmpfs (file (read write getattr map)))
