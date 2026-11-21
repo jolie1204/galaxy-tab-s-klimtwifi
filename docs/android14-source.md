@@ -4,6 +4,21 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## Full factory APEX activation, trial 26
+
+On November 20, 2026, the installed Android 14 apexd activated all 31 packages from the system and vendor image on the physical SM-T700 running Linux 6.12.118. Init used a temporary writable tmpfs at /data and the installed enforcing SELinux policy. [Trial sources, inventory and console verifier](../android14/factory-apex-trial/README.md)
+
+| Kernel uptime | Physical observation |
+| --- | --- |
+| 10.430 s | PID 1 was in a new default mount namespace. The 31 package manifests were absent there, and /data and its APEX session directory were on the same writable tmpfs. |
+| 15.673 s | Apexd reported that vold was unavailable in the isolated boot and used its checkpoint-free fallback. |
+| 17.156–17.341 s | Apexd mounted all 31 factory packages, completed its activation routine in 1,406 ms and published the activated status. PID 121 ran in the expected SELinux domain and default mount namespace. |
+| 17.658–17.669 s | Init generated the default linker configuration. It could see the APEX inventory and 31 manifests on separate read-only ext4 loop devices. |
+
+The final ARM QEMU control repeated the same setup with the regular daemon skipped. Both checks in the default namespace found 31 absent manifests, and the kernel returned to recovery. The successful runs matched the installed package names, versions and source paths. Physical vold, persistent userdata, the later APEX ready phase and Android framework launch remain to be verified. The next checkpoint is deriving the SDK and ART classpath from the activated packages.
+
+The kernel exposed internal MMC read-only and requested a software recovery restart at uptime 24.162 s. USB ACM and three identical reads of the retained console agreed on the 31 mounts. Fresh TWRP 3.7.0_9-0 returned at 22:04:51 PST. The 7,544,848-byte BOOT image had SHA-256 `5449f7770b2f88f7ce16b993212ccedf28926713c248cdc3a8ec4e1a1b58127f`. The full 8 MiB BOOT readback matched `c8be266f3810d57b1ece40e684115dcb77ef81e2111c69620f0fb4c920b7630a`, and the RECOVERY hash matched the previous trial. The audit log recorded a denied `none-iosched` module request during APEX startup. All 31 packages still activated under the installed enforcing policy. On each of SYSTEM and EFS six bytes differed, confined to primary ext4 mount and write metadata. TWRP reported both filesystems clean.
+
 ## Binder IPC and service manager, trial 25
 
 The November 20, 2026 hardware trial used the installed Android 14 `servicemanager` and `service` binaries on the SM-T700 with Linux 6.12.118. A UID 2000 shell matched the manager's AIDL descriptor in the service list and found the registered name `manager`. The kernel trace paired eight synchronous Binder exchanges, including the list, descriptor, ping and lookup calls. The installed SELinux policy remained enforcing. [Diagnostic setup and log verifier](../android14/binder-ipc-trial/README.md)
@@ -18,7 +33,7 @@ The November 20, 2026 hardware trial used the installed Android 14 `servicemanag
 
 The deliberately unregistered lookup used the default SELinux service label. The installed policy logged a `find` denial, and the client received the expected `not found` result over Binder. The hardware and vendor Binder device checks covered filesystem type, symlink resolution and mode. The Binder transactions exercised the framework Binder device.
 
-Both ARM QEMU controls used the installed SYSTEM snapshot. The positive control recorded eight completed exchanges. With the stock manager omitted, the same client waited for `servicemanager.ready`, the kernel recorded no exchanges, and the independent timer requested recovery. The next bounded milestone is activation of the remaining factory APEX packages with temporary writable data.
+Both ARM QEMU controls used the installed SYSTEM snapshot. The positive control recorded eight completed exchanges. With the stock manager omitted, the same client waited for `servicemanager.ready`, the kernel recorded no exchanges, and the independent timer requested recovery. Trial 26 subsequently validated full factory APEX activation with temporary writable data.
 
 The physical USB ACM and retained console agreed on all eight exchanges. A fresh TWRP 3.7.0_9-0 returned at 21:53:53 PST. The 7,548,944-byte diagnostic image had SHA-256 `07df5a58f2709c9e547454edf6189671e2613e010139a835ea9bcdb56e4f599f`. The full 8 MiB BOOT readback matched `0c514ae7df61241e6b1da6518ad3b647b3f2fd1aaaccada0bf7c8635a4913329`. The RECOVERY digest matched its previous value. On each of SYSTEM and EFS six bytes differed, confined to primary ext4 mount and write metadata, and TWRP reported both filesystems clean.
 

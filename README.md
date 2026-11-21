@@ -2,7 +2,7 @@
 
 **Galaxy Tab S 8.4 Wi-Fi SM-T700 전용입니다.** 실기에서 부팅을 확인한 비공식 LineageOS 21 ROM을 바탕으로 기본 앱 네 개를 뺀 TWRP 설치 ZIP을 만드는 스크립트입니다. 아래 빌드 절차와 실기 검증 기록을 참고하세요.
 
-SM-T700 실기에서 Linux 6.12.118로 설치된 Android 14의 서비스 관리자까지 실행했습니다. 부팅 10.765초에 Binder 장치와 서비스 목록·이름 조회를 검증했고, 커널 로그에서 요청과 응답 8쌍을 확인했습니다. [25차 실기 기록](docs/android14-source.md#binder-ipc-and-service-manager-trial-25)
+SM-T700 실기에서 Linux 6.12.118로 Android 14 기본 APEX 패키지 31개를 활성화했습니다. 임시 RAM 데이터 환경에서 부팅 17.669초에 31개 읽기 전용 마운트와 기본 네임스페이스의 링커 설정을 확인했습니다. [26차 실기 기록](docs/android14-source.md#full-factory-apex-activation-trial-26)
 
 The repacker takes one exact retiredtab LineageOS 21 full OTA, modifies its SYSTEM image offline, and rebuilds the TWRP ZIP with the original BOOT payload. The hardware-tested Slim ROM runs Android 14 (API 34) on the base ROM's Linux 3.4.113 kernel. Several patches listed in the maintainer's October build notes were unavailable during the trial, so the repacker uses the published OTA as its input. A separate Linux 6.12.118 RAM diagnostic provided an authenticated USB ADB shell and returned to TWRP by software request. [Hardware trial and board setting](kernel/early-adb/README.md#authenticated-usb-adb-on-linux-612-trial-19)
 
