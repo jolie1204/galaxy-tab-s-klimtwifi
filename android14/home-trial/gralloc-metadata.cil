@@ -1,0 +1,4 @@
+(typeattributeset mlstrustedobject (hal_graphics_allocator_default_tmpfs))
+(allow platform_app hal_graphics_allocator_default_tmpfs (file (read write getattr map)))
+(allow surfaceflinger hal_graphics_allocator_default_tmpfs (file (read write getattr map)))
+(allow shell hal_graphics_allocator_default_tmpfs (file (read write getattr map)))

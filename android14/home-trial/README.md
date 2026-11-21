@@ -81,3 +81,13 @@ Build [the Android hardware-buffer probe](gralloc-probe.c) using `armv7a-linux-a
 The same boot recorded a Bluetooth process abort because the stock `/data/misc/bluetooth/logs` path was absent from the minimal diagnostic init. The next trial restores those standard directories in its disposable RAM data.
 
 The software kernel deadline returned the tablet to fresh TWRP at 04:41:22 PST. Three retained console reads, the complete reused BOOT, original RECOVERY and both clean internal SYSTEM and EFS payloads verified. The previous physical allocator library and the tested removable file hashes were retained for rollback.
+
+## Trial 59
+
+[The metadata rules](gralloc-metadata.cil) allow `platform_app`, `surfaceflinger` and `shell` to read, write, inspect and map the graphics allocator's reserved metadata file type. Its MLS attribute permits the category-aware handoff for platform apps. The original policy and a recompilation control yielded the same effective allow rules. The patched policy introduced exactly the twelve expected individual permissions and one file-type attribute membership. Its SELinux file transitions, MLS constraints, enforcement mode and permissive domains were verified against the control.
+
+[The Bluetooth init patch](bluetooth-log-directories.patch) runs Android's stock directory creation on the diagnostic RAM data. It restores the paths expected by Bluetooth's snoop logger. Physical logs showed successful directory initialization and later requests for the unavailable Bluetooth HCI service. Hardware Bluetooth functionality remains open.
+
+The physical Linux kernel committed the exact new policy while enforcing. The 1×1 scratch buffer allocated and mapped at 41.919 seconds. The 2560×1600 compositor buffer allocated at 43.664 seconds. The native probe returned 0. The later physical audit identified two more receivers of the same metadata type. The hardware composer received navigation bar and framebuffer surface descriptors from SurfaceFlinger. `system_server` received screenshot metadata. Both recipients reported access denials. A 189-second Android display-thread watchdog stopped the framework before the Home screen appeared.
+
+The kernel deadline returned the tablet to fresh TWRP at 04:56:31 PST. The reused complete BOOT, original RECOVERY and both clean internal payloads verified. Three retained console copies matched. Keep the original and trial-59 policies for rollback. The next diagnostic tests only the two additional audited receivers and adds physical display observations.

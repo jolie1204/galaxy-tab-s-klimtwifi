@@ -1,0 +1,9 @@
+--- a/system/etc/init/logd.rc
++++ b/system/etc/init/logd.rc
+@@ -39,0 +40,6 @@
++
++# The isolated init path creates disposable /data before this event completes.
++on init && property:ro.boot.klimt_zygote=1
++    mkdir /data/misc/bluetooth 0770 bluetooth bluetooth
++    mkdir /data/misc/bluetooth/logs 0770 bluetooth bluetooth
++    write /dev/kmsg "KLIMT-HOME Bluetooth log directories initialized"
