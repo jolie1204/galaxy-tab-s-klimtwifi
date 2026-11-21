@@ -4,6 +4,35 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## Ueventd coldboot and device nodes, trial 23
+
+On November 20, 2026, the installed Android 14 ueventd completed its coldboot device scan on the SM-T700 running Linux 6.12.118. Android's own wait for `ro.cold_boot_done` completed, allowing init to execute its next action. The trial used the stock executable and device rules; the RAM script started only the ueventd service. [Diagnostic source and controls](../android14/ueventd-coldboot-trial/README.md)
+
+| Kernel uptime | Physical observation |
+| --- | --- |
+| 5.988 s | The property was unset. Before ueventd started, all four selected device paths returned ENOENT. |
+| 6.195 s | The kernel identified the daemon as PID 76 under enforcing SELinux in `u:r:ueventd:s0`. |
+| 8.688 s | The daemon reported that coldboot took 2.467 seconds. |
+| 8.693 s | Init's next action read `ro.cold_boot_done=true` and `init.svc.ueventd=running`. |
+| 15.255 s | Linux requested a software restart to recovery. Fresh TWRP 3.7.0_9-0 was confirmed on the same port at 21:33:58 PST. |
+
+| New character device | Major:minor | Mode | UID:GID |
+| --- | --- | --- | --- |
+| `/dev/full` | 1:7 | 0666 | 0:0 |
+| `/dev/zero` | 1:5 | 0666 | 0:0 |
+| `/dev/input/event0` | 13:64 | 0660 | 0:1004 |
+| `/dev/rtc0` | 252:0 | 0640 | 1000:1000 |
+
+Each device number resolved to its expected sysfs class entry. The daemon parsed the installed system and vendor rules. It also logged four missing ODM or legacy configuration paths before completing the scan. The trial measured node creation and metadata. Physical key events and RTC reads remain untested.
+
+The same kernel and SYSTEM snapshot passed the ARM QEMU test for the two common devices. With only the service-start condition disabled, the initial property stayed unset at the first checkpoint, the final init action was never observed, and the independent timeout requested recovery. Three replays of the packed BOOT matched the expanded kernel and ramdisk.
+
+USB ACM captured 19,815 bytes. Three reads of the retained 32,221-byte console agreed. The 7,546,896-byte BOOT file had SHA-256 `3bf001e25ebbe8e9b4476180b93c071f478e89c1d489a20134633277489ad89a`. Full 8 MiB BOOT readback matched `bc6d61e6b990eb3d576dcfed5a09ad28cccbef6ebc3db2982bc97fa6f863528d` before reboot and after returning to TWRP. RECOVERY matched its pre-trial digest.
+
+Across the trial and TWRP return, SYSTEM and EFS each changed by six bytes in the primary ext4 superblock. Those bytes belong to mount time, write time, mount count and lifetime KiB written. Every byte past the first 4 KiB on each partition was covered by matching before/after digest comparisons. Both filesystems reported clean on return.
+
+The installed early-init script invokes `apexd-bootstrap` and `perform_apex_config --bootstrap` after starting ueventd. The next milestone is to verify early APEX activation and the resulting runtime paths. Android framework startup, the launcher and performance testing remain pending.
+
 ## Cgroups and the Android property service, trial 22
 
 On November 20, 2026, the installed Android 14 init on the SM-T700 completed its cgroup setup and exercised its protocol 2 property service on Linux 6.12.118. The diagnostic used a minimal early-init action and kept MMC read-only. [Kernel configuration, ramdisk changes and probe](../android14/property-service-trial/README.md)
@@ -23,7 +52,7 @@ The real USB ACM capture contained 16,694 bytes. Three reads of TWRP's retained 
 
 On each of SYSTEM and EFS, the only differences across the trial and TWRP return were six bytes in the primary ext4 superblock. They belonged to mount time, write time, mount count and lifetime KiB written. The remaining bytes of both complete partitions matched their pre-trial SHA-256 comparisons. Both filesystems reported clean in TWRP.
 
-The next hardware checkpoint is starting Android's `ueventd`, observing its coldboot device scan and verifying `ro.cold_boot_done=true` through the property service. Zygote, the framework, the launcher and workload performance remain untested on this kernel.
+Trial 23 subsequently verified ueventd coldboot and the completion property on hardware. Zygote, the framework, the launcher and workload performance remain untested on this kernel.
 
 ## SELinux and second-stage init on Linux 6.12, trial 21
 

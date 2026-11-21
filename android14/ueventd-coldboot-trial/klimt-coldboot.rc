@@ -1,0 +1,15 @@
+on early-init
+    write /dev/kmsg "KLIMT-COLD BEFORE ${ro.boot.klimt_trial} cold=${ro.cold_boot_done:-unset}"
+
+on early-init && property:ro.boot.klimt_coldboot=1
+    start ueventd
+
+on init
+    write /dev/kmsg "KLIMT-COLD AFTER ${ro.boot.klimt_trial} cold=${ro.cold_boot_done:-unset} svc=${init.svc.ueventd:-unset}"
+
+service ueventd /system/bin/ueventd
+    class core
+    disabled
+    oneshot
+    seclabel u:r:ueventd:s0
+    user root
