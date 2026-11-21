@@ -4,6 +4,21 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## Android 14 first stage on Linux 6.12, trial 20
+
+On November 20, 2026, the physical SM-T700 ran Android 14 first-stage `init` as PID 1 on Linux `6.12.118-klimt-adbreturn1`. It discovered the installed SYSTEM by partition name, set the partition read-only at the block layer and used Android's first-stage mount to switch root. After the switch, PID 1 verified that `/` was read-only ext4 on the internal `mmcblk0p18` and that the same filesystem held an executable ARM32 `/system/bin/init`. This trial paired a source-built first-stage ramdisk with the Android 14 SYSTEM already installed on the tablet. [Diagnostic patch, fstab and build settings](../android14/first-stage-trial/README.md)
+
+| Physical observation | Result |
+| --- | --- |
+| Host USB capture | CDC ACM enumerated at 20:54:13 PST. The PC received 10,948 bytes through its `/dev/ttyACM1`, including the tablet's native PID 1 marker, mount verdict and recovery request. |
+| Kernel uptime | PID 1 marker at 4.091 s, read-only block guard at 4.329 s, ext4 mount without journal replay at 4.343 s. |
+| Software recovery | Linux logged the `recovery` restart at 16.420 s. Fresh TWRP 3.7.0_9-0 was confirmed on the same port at 20:54:48 PST. Three reads of its 23,047-byte previous console agreed and contained the same run ID and verdict. |
+| Image | The 7,424,016-byte BOOT image had SHA-256 `1655474f4fd54c0d6915676fa9175674a40738cf4a1f253ffac6ad7dbfa34005`. The entire 8 MiB BOOT partition, including its retained tail, matched the projected digest after recovery. |
+
+The RECOVERY partition matched its pre-trial SHA-256. The full SYSTEM and EFS hashes each differed across the reboot, then remained stable across two complete reads in TWRP. TWRP's own kernel logged recovery mounting SYSTEM repeatedly and EFS once. Both ext4 superblocks were clean and recorded writes during TWRP startup. The trial kernel logged its read-only SYSTEM mount, and its fstab contained no EFS entry. The pre-trial hashes alone cannot establish which bytes changed across the entire boot and recovery cycle.
+
+The diagnostic requested recovery immediately after checking the new root. The next milestone is loading SELinux policy from the installed system and observing entry into second-stage `init`. Android framework startup, the launcher and performance on 6.12 still require hardware tests. The authenticated ADB shell ran in the preceding trial. [Trial 19 USB ADB results](../kernel/early-adb/README.md#authenticated-usb-adb-on-linux-612-trial-19)
+
 ## SM-T700 hardware ID for Android first-stage mount
 
 The current standard and embedded Android BOOTs supply `universal5420` in the board's `/firmware/android/hardware` property. Android 14's libfstab reads this property when the parent is compatible with `android,firmware`. This selects the existing `fstab.universal5420` even when Samsung supplies other command-line arguments and omits the hardware ID. Android's second-stage init also imports properties from this node. [Current BOOT and paired SYSTEM checksums](../checksums/android14-firmware-dt-20261120.sha256)
@@ -16,7 +31,7 @@ As a regression test, the normal `bootimage` build received the previous prebuil
 
 In Cortex-A15 emulation, an Android first-stage boot with a nonempty command line missing the hardware ID reproduced the fstab failure with the former tree. Four runs with the corrected board properties reached the EFS and SYSTEM partition wait. Those runs covered an omitted ID, the correct ID, two copies of the correct ID, and a conflicting ID. The guest used the Android ramdisk and a virtual board without the tablet's storage. Three separate replays of the packaged tablet images verified the complete expanded kernel and both firmware nodes at handoff, including the embedded build with the external initrd tag omitted. The device-tree change preserved the existing Samsung secure firmware node. The sibling Chagall Wi-Fi board compiled to its original DTB byte for byte.
 
-On the tablet, verify which partition uevents and device links Linux 6.12 presents for EFS and SYSTEM, then check first-stage mount and second-stage init. The standalone early-ADB probe runs its own RAM init and uses its own command line. Its decompressor checkpoints can be evaluated independently of Android fstab selection.
+Trial 19 subsequently captured the tablet's partition uevents, including EFS on p3 and SYSTEM on p18. Trial 20 verified the by-name SYSTEM link and the first-stage root switch. The standalone early-ADB probe uses a separate RAM init and command line. [First-stage hardware result](#android-14-first-stage-on-linux-612-trial-20)
 
 ## Corrected Linux 6.12 BOOT images, November 20
 

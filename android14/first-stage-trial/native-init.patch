@@ -1,0 +1,35 @@
+--- a/init/first_stage_init.cpp
++++ b/init/first_stage_init.cpp
+@@ -17,2 +17,3 @@
+-#include "first_stage_init.h"
+-
++#include "first_stage_init.h"
++#include "mount-trial.h"
++
+@@ -394,2 +395,4 @@
+-    InitKernelLogging(argv);
+-
++    InitKernelLogging(argv);
++    SetFatalRebootTarget(std::string("recovery"));
++    klimt_trial::Start();
++
+@@ -512,3 +515,3 @@
+-    if (IsRecoveryMode()) {
+-        LOG(INFO) << "First stage mount skipped (recovery mode)";
+-    } else {
++    if (IsRecoveryMode()) {
++        klimt_trial::Stop("FAIL unexpected recovery mode");
++    } else {
+@@ -525,5 +528,7 @@
+-
+-        if (!fsm->DoFirstStageMount()) {
+-            LOG(FATAL) << "Failed to mount required partitions early ...";
+-        }
+-    }
++
++        const dev_t trial_system = klimt_trial::ProtectSystem();
++        if (!fsm->DoFirstStageMount()) {
++            klimt_trial::Stop("FAIL Android DoFirstStageMount");
++        }
++        klimt_trial::CheckRoot(trial_system);
++    }
