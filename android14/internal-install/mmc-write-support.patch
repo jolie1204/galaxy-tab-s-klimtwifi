@@ -1,0 +1,5 @@
+--- a/drivers/mmc/core/block.c
++++ b/drivers/mmc/core/block.c
+@@ -2570,2 +2569,0 @@
+-	/* Diagnostic kernel: make every MMC disk read-only before scanning partitions. */
+-	md->read_only = true;

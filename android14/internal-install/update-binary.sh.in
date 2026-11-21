@@ -1,0 +1,58 @@
+#!/sbin/sh
+set -eu
+set -o pipefail
+umask 077
+
+case "${2:-}" in ''|*[!0-9]*) exit 2 ;; esac
+output=/proc/self/fd/$2
+archive=${3:?Missing update archive}
+base=/dev/block/bootdevice/by-name
+boot=$base/BOOT
+system=$base/SYSTEM
+scratch=/tmp/klimt-install.$$
+
+message() {
+    printf 'ui_print %s\nui_print\n' "$*" > "$output"
+}
+
+require_hash() {
+    line=$(sha256sum "$1")
+    test "${line%% *}" = "$2"
+}
+
+test "$(id -u)" = 0
+test "$(getprop ro.product.model)" = SM-T700
+test "$(getprop ro.product.device)" = klimtwifi
+test -n "$(getprop ro.twrp.version)"
+test "$(readlink -f "$boot")" = /dev/block/mmcblk0p9
+test "$(readlink -f "$system")" = /dev/block/mmcblk0p18
+test "$(blockdev --getsize64 "$boot")" = @BOOT_SIZE@
+test "$(blockdev --getsize64 "$system")" = @SYSTEM_SIZE@
+if awk '$2 == "/system" || $2 == "/system_root" ||
+        $1 ~ /\/(mmcblk0p18|SYSTEM)$/ { found=1 }
+        END { exit !found }' /proc/mounts; then
+    message 'Unmount SYSTEM in recovery before starting the update.'
+    exit 1
+fi
+
+mkdir "$scratch"
+trap 'rm -f "$scratch/boot.img"; rmdir "$scratch"' EXIT
+message 'Verifying SM-T700 payloads before writing.'
+unzip -p "$archive" boot.img > "$scratch/boot.img"
+test "$(wc -c < "$scratch/boot.img")" = @BOOT_SIZE@
+require_hash "$scratch/boot.img" @BOOT_SHA@
+image_hash=$(unzip -p "$archive" system.img | sha256sum)
+test "${image_hash%% *}" = @SYSTEM_SHA@
+
+message 'Writing and verifying SYSTEM.'
+unzip -p "$archive" system.img | dd of="$system" bs=1048576 conv=notrunc
+sync
+blockdev --flushbufs "$system"
+require_hash "$system" @SYSTEM_SHA@
+
+message 'Writing and verifying BOOT.'
+dd if="$scratch/boot.img" of="$boot" bs=4096 conv=notrunc
+sync
+blockdev --flushbufs "$boot"
+require_hash "$boot" @BOOT_SHA@
+message 'SM-T700 SYSTEM and BOOT verified.'

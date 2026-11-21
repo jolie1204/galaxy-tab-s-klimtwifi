@@ -1,0 +1,24 @@
+--- a/klimt-framework.rc
++++ b/klimt-framework.rc
+@@ -70 +70 @@
+-    mount tmpfs tmpfs /data nosuid nodev noexec mode=0771,uid=1000,gid=1000,size=384m
++    setprop ro.crypto.state unencrypted
+@@ -71,0 +72 @@
++    load_persist_props
+@@ -101 +101,0 @@
+-    exec_start klimt-classpath-env
+@@ -114,2 +113,0 @@
+-    exec_start klimt-odrefresh
+-    exec_start klimt-art-log
+@@ -129,2 +126,0 @@
+-    exec_start klimt-cache
+-    exec_start klimt-cache-recheck
+@@ -215 +210,0 @@
+-    setprop debug.sf.nobootanimation 1
+@@ -245 +239,0 @@
+-    setprop persist.sys.disable_rescue true
+@@ -702,0 +697,4 @@
++
++
++on property:debug.klimt_diag_35=install_ready && property:sys.boot_completed=1
++    write /dev/kmsg "KLIMT-INSTALL READY persistent Android"

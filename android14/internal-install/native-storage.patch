@@ -1,0 +1,14 @@
+--- a/init/first_stage_init.cpp
++++ b/init/first_stage_init.cpp
+@@ -529,4 +529,7 @@
+-        klimt_trial::ProtectSystem();
+-        const dev_t trial_system = klimt_trial::MountRemovableSystem();
+-        SwitchRoot("/system");
+-        klimt_trial::CheckRoot(trial_system);
++        const dev_t system = klimt_trial::ProtectSystem();
++        if (!fsm->DoFirstStageMount()) {
++            klimt_trial::Stop("FAIL internal SYSTEM first-stage mount");
++        }
++        klimt_trial::CheckRoot(system);
++        klimt_trial::MountPersistentData();
++        klimt_trial::StartWatchdog();
