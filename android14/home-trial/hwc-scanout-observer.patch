@@ -1,0 +1,73 @@
+--- a/system/bin/klimt-framework-poll.sh
++++ b/system/bin/klimt-framework-poll.sh
+@@ -33,6 +33,25 @@
+     /system/bin/toybox timeout -k 2 "$@"
+ }
+
++collect_hwc_scanout() {
++    timeout 490 /system/bin/logcat -T 1 -v raw -s KlimtHwcFrame:V |
++        while IFS=' ' read -r kind stamp fb size planes lit preview; do
++            if [ "$kind" != scanout ]; then
++                case "$kind" in
++                    mmap|sync|invalid) "$property" debug.klimt_diag_35 "HWC_READ_ERROR $kind $stamp $fb $size" ;;
++                esac
++                continue
++            fi
++            bits=${preview#preview=}
++            [ "${#bits}" -eq 96 ] || continue
++            first=$(printf '%s' "$bits" | /system/bin/toybox cut -c1-48)
++            second=$(printf '%s' "$bits" | /system/bin/toybox cut -c49-96)
++            "$property" debug.klimt_diag_35 "HWC_FRAME $stamp $fb $size $planes $lit"
++            "$property" debug.klimt_diag_33 "HWC_PIXELS0 $stamp $first"
++            "$property" debug.klimt_diag_34 "HWC_PIXELS1 $stamp $second"
++        done
++}
++
+ cycle=0
+ while [ "$cycle" -lt 60 ]; do
+     cycle=$((cycle + 1))
+@@ -65,6 +84,10 @@
+             END { exit type != "tmpfs" }' /proc/self/mountinfo; then
+         "$property" debug.klimt_diag_31 'RAM_SETUP guard failed'
+         exit 1
++    fi
++    if [ "${hwc_observer_started:-0}" = 0 ]; then
++        hwc_observer_started=1
++        collect_hwc_scanout &
+     fi
+     if [ "${unlocked_observed:-0}" = 0 ]; then
+         userstate=$(timeout 12 /system/bin/am get-started-user-state 0 2>/dev/null)
+@@ -172,33 +195,4 @@
+         /system/bin/toybox cut -c1-86)
+     "$property" debug.klimt_display_hwc "${physical:-unreported}"
+     "$property" debug.klimt_display_state "${active:-unreported}"
+-    [ -n "$physical" ] && [ -n "$active" ] || continue
+-    if [ "$(/system/bin/getprop init.svc.bootanim)" = running ] &&
+-        [ "$(/system/bin/getprop service.bootanim.exit)" != 1 ]; then
+-        continue
+-    fi
+-    display_id=${physical#Display }
+-    display_id=${display_id%% *}
+-    capture=/data/local/tmp/klimt-home.raw
+-    capture_error=$(timeout 55 /system/bin/screencap -q -d "$display_id" "$capture" 2>&1)
+-    capture_status=$?
+-    capture_detail=$(printf '%s\n' "$capture_error" | /system/bin/toybox tail -n 1 |
+-        /system/bin/toybox cut -c1-45)
+-    "$property" debug.klimt_diag_35 "SCALED_CAPTURE status=$capture_status ${capture_detail:-none}"
+-    if [ "$capture_status" = 0 ] && timeout 12 /system/bin/klimt-frame-probe "$capture"; then
+-        details=$(timeout 8 /system/bin/logcat -d -v raw -s KlimtFrame:I |
+-            /system/bin/toybox tail -n 1)
+-        case "$details" in
+-            capture=640x400,format=*,lit=[1-9]*|capture=400x640,format=*,lit=[1-9]*)
+-                /system/bin/toybox rm -f "$capture"
+-                if [ "$focus" = "$home" ]; then
+-                    "$property" debug.klimt_home_capture "$details"
+-                    break
+-                fi
+-                "$property" debug.klimt_diag_35 "DISPLAY_FRAME $details"
+-                continue ;;
+-        esac
+-    fi
+-    "$property" debug.klimt_home_capture failed
+-    /system/bin/toybox rm -f "$capture"
+ done

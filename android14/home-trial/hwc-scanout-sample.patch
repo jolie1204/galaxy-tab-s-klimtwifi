@@ -1,0 +1,157 @@
+--- a/hwc2_device/HwcDisplay.cpp
++++ b/hwc2_device/HwcDisplay.cpp
+@@ -17,6 +17,18 @@
+ #define LOG_TAG "hwc-display"
+ #define ATRACE_TAG ATRACE_TAG_GRAPHICS
+
++#include <android/log.h>
++#include <atomic>
++#include <cerrno>
++#include <ctime>
++#include <drm/drm_fourcc.h>
++#include <linux/dma-buf.h>
++#include <poll.h>
++#include <sys/ioctl.h>
++#include <sys/mman.h>
++#include <thread>
++#include <unistd.h>
++
+ #include "HwcDisplay.h"
+
+ #include "DrmHwcTwo.h"
+@@ -27,6 +39,120 @@
+ #include "utils/properties.h"
+
+ namespace android {
++
++namespace {
++
++void SampleScanout(const LayerData& layer, size_t planes) {
++  if (!layer.bi || !layer.fb || layer.pi.RequireScalingOrPhasing() ||
++      layer.pi.transform != 0 || layer.pi.source_crop.left != 0 ||
++      layer.pi.source_crop.top != 0 || layer.pi.display_frame.left != 0 ||
++      layer.pi.display_frame.top != 0) {
++    return;
++  }
++
++  const BufferInfo& buffer = *layer.bi;
++  const uint32_t width = buffer.width;
++  const uint32_t height = buffer.height;
++  const uint32_t pitch = buffer.pitches[0];
++  const uint32_t offset = buffer.offsets[0];
++  const int fd = buffer.prime_fds[0];
++  const bool bgr = buffer.format == DRM_FORMAT_XRGB8888 ||
++                   buffer.format == DRM_FORMAT_ARGB8888;
++  const bool rgb = buffer.format == DRM_FORMAT_XBGR8888 ||
++                   buffer.format == DRM_FORMAT_ABGR8888;
++  if (!((width == 1600 && height == 2560) ||
++        (width == 2560 && height == 1600)) ||
++      layer.pi.source_crop.right != width || layer.pi.source_crop.bottom != height ||
++      (!rgb && !bgr) || fd < 0 || pitch < width * 4 || pitch > width * 8 ||
++      offset > 4096 ||
++      (buffer.modifiers[0] != DRM_FORMAT_MOD_LINEAR &&
++       buffer.modifiers[0] != DRM_FORMAT_MOD_INVALID)) {
++    return;
++  }
++
++  struct timespec now {};
++  static time_t last_sample = 0;
++  if (clock_gettime(CLOCK_BOOTTIME, &now) != 0 ||
++      now.tv_sec < 220 || now.tv_sec - last_sample < 18) {
++    return;
++  }
++  if (layer.acquire_fence && *layer.acquire_fence >= 0) {
++    struct pollfd pending { *layer.acquire_fence, POLLIN, 0 };
++    if (poll(&pending, 1, 0) != 1 || !(pending.revents & POLLIN))
++      return;
++  }
++  last_sample = now.tv_sec;
++
++  const size_t length = offset + size_t(pitch) * height;
++  static std::atomic<bool> worker_running{false};
++  if (worker_running.exchange(true))
++    return;
++  const int worker_fd = dup(fd);
++  if (worker_fd < 0) {
++    worker_running.store(false);
++    return;
++  }
++  const uint32_t framebuffer = layer.fb->GetFbId();
++  std::thread([=] {
++    auto read = [&] {
++      const off_t allocation = lseek(worker_fd, 0, SEEK_END);
++      if (allocation < 0 || uint64_t(allocation) < length) {
++        __android_log_print(ANDROID_LOG_WARN, "KlimtHwcFrame", "invalid DMA buffer size");
++        return;
++      }
++      lseek(worker_fd, 0, SEEK_SET);
++      void* mapping = mmap(nullptr, length, PROT_READ, MAP_SHARED, worker_fd, 0);
++      if (mapping == MAP_FAILED) {
++        __android_log_print(ANDROID_LOG_WARN, "KlimtHwcFrame",
++                            "mmap errno=%d", errno);
++        return;
++      }
++      struct dma_buf_sync sync { DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ };
++      if (ioctl(worker_fd, DMA_BUF_IOCTL_SYNC, &sync) != 0) {
++        __android_log_print(ANDROID_LOG_WARN, "KlimtHwcFrame",
++                            "sync errno=%d", errno);
++        munmap(mapping, length);
++        return;
++      }
++
++      constexpr char alphabet[] =
++          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
++      char preview[97] = {};
++      unsigned int lit = 0;
++      auto* pixels = static_cast<const uint8_t*>(mapping) + offset;
++      for (unsigned int y = 0; y < 12; ++y) {
++        const unsigned int row = (2 * y + 1) * height / 24;
++        for (unsigned int x = 0; x < 8; ++x) {
++          const unsigned int column = (2 * x + 1) * width / 16;
++          const uint8_t* pixel = pixels + row * pitch + column * 4;
++          const uint8_t red = pixel[rgb ? 0 : 2];
++          const uint8_t green = pixel[1];
++          const uint8_t blue = pixel[rgb ? 2 : 0];
++          preview[y * 8 + x] = alphabet[(red >> 6) * 16 + (green >> 6) * 4 + (blue >> 6)];
++          lit += (red | green | blue) != 0;
++        }
++      }
++
++      sync.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ;
++      const int sync_status = ioctl(worker_fd, DMA_BUF_IOCTL_SYNC, &sync);
++      munmap(mapping, length);
++      struct timespec end {};
++      if (sync_status == 0 && clock_gettime(CLOCK_BOOTTIME, &end) == 0 &&
++          (end.tv_sec - now.tv_sec) * 1000L + (end.tv_nsec - now.tv_nsec) / 1000000L < 400) {
++        __android_log_print(ANDROID_LOG_INFO, "KlimtHwcFrame",
++                            "scanout u=%lld.%03ld fb=%u size=%ux%u planes=%zu lit=%u preview=%s",
++                            static_cast<long long>(now.tv_sec), now.tv_nsec / 1000000,
++                            framebuffer, width, height, planes, lit, preview);
++      }
++    };
++    read();
++    close(worker_fd);
++    worker_running.store(false);
++  }).detach();
++}
++
++}  // namespace
++
+
+ std::string HwcDisplay::DumpDelta(HwcDisplay::Stats delta) {
+   if (delta.total_pixops_ == 0)
+@@ -545,6 +671,14 @@
+     return HWC2::Error::BadParameter;
+   }
+
++  if (!a_args.test_only && GetPipe().connector->Get()->IsInternal()) {
++    if (use_client_layer) {
++      SampleScanout(client_layer_.GetLayerData(), z_map.size());
++    } else if (z_map.size() == 1) {
++      SampleScanout(z_map.begin()->second->GetLayerData(), 1);
++    }
++  }
++
+   if (mode_update_commited_) {
+     staged_mode_.reset();
+     vsync_tracking_en_ = false;
