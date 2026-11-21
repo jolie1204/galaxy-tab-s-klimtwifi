@@ -1,0 +1,33 @@
+--- a/drivers/usb/dwc3/ep0.c
++++ b/drivers/usb/dwc3/ep0.c
+@@ -656,2 +656,3 @@
+-	cfg = le16_to_cpu(ctrl->wValue);
+-
++	cfg = le16_to_cpu(ctrl->wValue);
++	dev_info_ratelimited(dwc->dev, "KLIMT-EP0 config=%u state=%u\n", cfg, state);
++
+@@ -701,2 +702,4 @@
+-	}
+-	return ret;
++	}
++	dev_info_ratelimited(dwc->dev, "KLIMT-EP0 result=%d state=%u\n",
++			     ret, dwc->gadget->state);
++	return ret;
+--- a/drivers/usb/gadget/composite.c
++++ b/drivers/usb/gadget/composite.c
+@@ -1018,2 +1018,4 @@
+-		result = f->set_alt(f, tmp, 0);
+-		if (result < 0) {
++		result = f->set_alt(f, tmp, 0);
++		dev_info_ratelimited(&cdev->gadget->dev, "KLIMT-ALT function=%s intf=%u ret=%d\n",
++				     f->name, tmp, result);
++		if (result < 0) {
+--- a/drivers/usb/gadget/function/f_fs.c
++++ b/drivers/usb/gadget/function/f_fs.c
+@@ -3829,2 +3829,4 @@
+-
+-	if (alt > MAX_ALT_SETTINGS)
++
++	pr_info_ratelimited("KLIMT-FFS state=%d intf=%u alt=%u\n",
++			    ffs->state, interface, alt);
++	if (alt > MAX_ALT_SETTINGS)

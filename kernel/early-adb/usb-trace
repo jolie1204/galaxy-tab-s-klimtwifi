@@ -1,0 +1,33 @@
+#!/bin/busybox sh
+# Run before UDC bind, in the RAM diagnostic only. PID 1 owns the recovery timer.
+trace=/sys/kernel/tracing
+mark() {
+    printf '<4>KLIMT-USBTRACE %s\n' "$*" >/dev/kmsg
+}
+enable_event() {
+    dir="$trace/events/$1"
+    [ -w "$dir/enable" ] || { mark "missing $1"; return; }
+    if [ -n "${2:-}" ]; then
+        printf '%s\n' "$2" >"$dir/filter" || { mark "filter failed $1"; return; }
+    fi
+    echo 1 >"$dir/enable" || mark "enable failed $1"
+}
+mount -t tracefs tracefs "$trace" || [ -e "$trace/trace" ] || exit 0
+read -r run </usb-trace-id || exit 0
+mark "start $run"
+enable_event dwc3/dwc3_ctrl_req
+enable_event dwc3/dwc3_gadget_ep_cmd 'cmd_status != 0 || name ~ "ep0*"'
+enable_event dwc3/dwc3_gadget_ep_enable
+enable_event gadget/usb_ep_enable
+enable_event dwc3/dwc3_gadget_giveback 'name ~ "ep0*"'
+enable_event dwc3/dwc3_event '!(event & 0x3d)'
+echo 1 >"$trace/tracing_on" || exit 0
+# Copy early control traffic into the persistent console even without a USB shell.
+# Cap the number of records so a busy connection cannot fill the console.
+(
+    count=0
+    while IFS= read -r line && [ "$count" -lt 320 ]; do
+        mark "$line"
+        count=$((count + 1))
+    done <"$trace/trace_pipe"
+) &
