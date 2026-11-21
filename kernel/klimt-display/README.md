@@ -7,3 +7,13 @@ SM-T700 TWRP reported the Samsung S6E3HA1 panel ID `42:11:03` and a 1600×2560 m
 The two affected drivers compiled to ARM EABI5 objects against Linux 6.12.118. Register-encoding checks verified 1600×2560 and the 800×2560 input to DSIM1 after MIC. No panel was driven by this patch.
 
 The downstream Klimt board enables MIC between FIMD and DSIM1. It programs FIMD and MIC for the native width and DSIM1 for the compressed stream width. The display port still needs a 5420 MIC route, the matching S6E3HA1 power and DCS sequence, and a visible KMS test. Android also needs a compatible graphics allocator, EGL implementation and composer. Panfrost detection was previously verified on the tablet.
+
+## Physical framebuffer and DCS test, trial 32
+
+Apply [the MIC and panel probe patch](klimt-mic-panel-probe.patch) after the resolution patch. Set `CONFIG_DRM_EXYNOS_MIC=y` and `CONFIG_DRM_PANEL_SAMSUNG_S6E3HA1_PROBE=y` in the existing SM-T700 diagnostic config. Compile the target's DTB and retain the verified Android firmware, ramoops, software recovery and USB 2 LPM settings. The optional panel driver implements the ordered rails and reset and attempts DCS ID 0x04. Display-on and brightness programming remain disabled.
+
+Linux 6.12.118 registered Exynos DRM minor 0 and the `exynosdrmfb` framebuffer on the SM-T700. Panfrost registered independently. The Exynos5420 DSI host attached a four-lane RGB888 panel device, but DCS ID 0x04 timed out at uptime 4.222 s. Three reads of the retained console matched the live USB ACM result. Actual panel response and pixels remain unverified. TWRP returned by software. Full BOOT and original RECOVERY readbacks matched; full SYSTEM and EFS comparisons changed only six primary ext4 mount metadata bytes each, and both filesystems were clean.
+
+Two source patches replayed against 6.12.118 with zero fuzz. The ARM linked image and device tree were verified, and all three packed-image replays matched. The next DCS test uses the downstream host initialization and high-speed command order.
+
+The 7553040-byte probe BOOT had SHA-256 `33db951b73763bb65f3b4b4eaeb44356cef291f7d65b45544ab8b20755dd1180`; the full partition readback was `be7b1f24cefb21d135078d58679e64009b107e6d9269f5b4692f03da5b6abdaf`.
