@@ -1,0 +1,105 @@
+--- a/klimt-property.rc
++++ b/klimt-property.rc
+@@ -242,6 +242,10 @@
+     start vendor.hwcomposer-2-1
+     start surfaceflinger
+     setprop ro.hw_timeout_multiplier 3
++    setprop persist.sys.disable_rescue true
++    setprop debug.hwui.renderer skiavk
++    write /dev/kmsg "KLIMT-HOME RENDERER ${debug.hwui.renderer:-unset}"
++    write /dev/kmsg "KLIMT-HOME RESCUE ${persist.sys.disable_rescue:-unset}"
+     write /dev/kmsg "KLIMT-HOME TIMEOUT ${ro.hw_timeout_multiplier:-unset}"
+     start zygote
+     start klimt-framework-poll
+@@ -618,3 +622,48 @@
+
+ on property:debug.klimt_early_home=*
+     write /dev/kmsg "KLIMT-HOME REQUEST ${debug.klimt_early_home}"
++
++on property:debug.klimt_ui_01=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 01 ${debug.klimt_ui_01}"
++
++on property:debug.klimt_ui_02=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 02 ${debug.klimt_ui_02}"
++
++on property:debug.klimt_ui_03=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 03 ${debug.klimt_ui_03}"
++
++on property:debug.klimt_ui_04=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 04 ${debug.klimt_ui_04}"
++
++on property:debug.klimt_ui_05=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 05 ${debug.klimt_ui_05}"
++
++on property:debug.klimt_ui_06=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 06 ${debug.klimt_ui_06}"
++
++on property:debug.klimt_ui_07=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 07 ${debug.klimt_ui_07}"
++
++on property:debug.klimt_ui_08=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 08 ${debug.klimt_ui_08}"
++
++on property:debug.klimt_ui_09=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 09 ${debug.klimt_ui_09}"
++
++on property:debug.klimt_ui_10=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 10 ${debug.klimt_ui_10}"
++
++on property:debug.klimt_ui_11=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 11 ${debug.klimt_ui_11}"
++
++on property:debug.klimt_ui_12=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 12 ${debug.klimt_ui_12}"
++
++on property:debug.klimt_ui_13=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 13 ${debug.klimt_ui_13}"
++
++on property:debug.klimt_ui_14=*
++    write /dev/kmsg "KLIMT-HOME SYSTEMUI 14 ${debug.klimt_ui_14}"
++
++on property:debug.klimt_user=*
++    write /dev/kmsg "KLIMT-HOME USER ${debug.klimt_user}"
+--- a/system/bin/klimt-framework-poll.sh
++++ b/system/bin/klimt-framework-poll.sh
+@@ -83,6 +83,40 @@
+         /system/bin/toybox tail -n 1 | /system/bin/toybox cut -c1-86)
+     /system/bin/setprop debug.klimt_home "step=$cycle,activity=$activity,package=$package,window=$window,sf=$display,boot=${boot:-unset}"
+     /system/bin/setprop debug.klimt_java "${phase:-unreported}"
++    if [ "$cycle" -ge 16 ] && [ "$activity" = 1 ] && [ "${ui_captured:-0}" = 0 ]; then
++        ui=$(/system/bin/toybox timeout 8 /system/bin/logcat -b crash -d -v brief -s AndroidRuntime:E |
++            /system/bin/awk '\
++                /Process: com.android.systemui,/ { active=1; i=0 }\
++                active { lines[++i]=$0; if (i==7) active=0 }\
++                END { if (i>2) for (j=1; j<=i; j++) print lines[j] }')
++        if [ -n "$ui" ]; then
++            i=0
++            printf '%s\n' "$ui" | while IFS= read -r line; do
++                i=$((i + 1))
++                first=$(printf '%s' "$line" | /system/bin/toybox cut -c1-88)
++                /system/bin/setprop "$(printf 'debug.klimt_ui_%02d' "$i")" "$first"
++                if [ "${#line}" -gt 88 ]; then
++                    i=$((i + 1))
++                    more=$(printf '%s' "$line" | /system/bin/toybox cut -c89-172)
++                    /system/bin/setprop "$(printf 'debug.klimt_ui_%02d' "$i")" "+$more"
++                fi
++            done
++            userstate=$(/system/bin/toybox timeout 6 /system/bin/am get-started-user-state 0)
++            available=$(/system/bin/getprop sys.user.0.ce_available)
++            /system/bin/setprop debug.klimt_user "${userstate:-unreported},ce=${available:-unset}"
++            /system/bin/toybox timeout 8 /system/bin/logcat -b main -b system -d -v brief -s \
++                HWUI:W OpenGLRenderer:W VulkanManager:W libEGL:W SurfaceFlinger:E Gralloc4:W | \
++                /system/bin/toybox tail -n 6 | (
++                    slot=30
++                    while IFS= read -r line; do
++                        slot=$((slot + 1))
++                        detail=$(printf '%s' "$line" | /system/bin/toybox cut -c1-82)
++                        /system/bin/setprop "debug.klimt_diag_$slot" "GFX $detail"
++                    done
++                )
++            ui_captured=1
++        fi
++    fi
+     if [ "$boot" != 1 ] && [ "$cycle" -ge 15 ] &&
+         [ "$activity" = 1 ] && [ "$window" = 1 ] && [ "${early_home:-0}" = 0 ]; then
+         if /system/bin/toybox timeout 8 /system/bin/dumpsys window |
