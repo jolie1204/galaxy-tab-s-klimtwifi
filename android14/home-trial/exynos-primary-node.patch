@@ -1,0 +1,15 @@
+--- a/cros_gralloc/cros_gralloc_driver.cc
++++ b/cros_gralloc/cros_gralloc_driver.cc
+@@ -109,0 +110,12 @@
++	if (drv && !strcmp(drv_get_name(drv), "exynos")) {
++		/* Exynos dumb-buffer ioctls need a primary node. Leave KMS to the composer. */
++		const bool primary = drmGetNodeTypeFromFd(fd) == DRM_NODE_PRIMARY;
++		if (primary && (!drmIsMaster(fd) || drmDropMaster(fd) == 0)) {
++			ALOGI("Using the Exynos primary DRM node for dumb buffers");
++		} else {
++			if (primary)
++				ALOGE("Could not release Exynos DRM master: %s", strerror(errno));
++			drv_destroy(drv);
++			drv = NULL;
++		}
++	}
