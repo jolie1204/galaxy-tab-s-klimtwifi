@@ -1,0 +1,80 @@
+--- a/drivers/gpu/drm/bridge/samsung-dsim.c
++++ /home/harry/android/galaxy-tab-s/evidence/2026-11-21-dsim-header43.F9NVeA/exynos-mic/drivers/gpu/drm/bridge/samsung-dsim.c	2026-11-21 00:28:03.125326872 -0800
+@@ -1229,6 +1229,9 @@
+ 		dsi->state ^= DSIM_STATE_CMD_LPM;
+ 	}
+ 
++	if (xfer->wait_header_empty)
++		samsung_dsim_write(dsi, DSIM_INTSRC_REG, DSIM_INT_SFR_HDR_FIFO_EMPTY);
++
+ 	samsung_dsim_write(dsi, DSIM_PKTHDR_REG, reg);
+ 
+ 	if (xfer->flags & MIPI_DSI_MSG_REQ_ACK)
+@@ -1345,7 +1348,7 @@
+ 
+ 	samsung_dsim_send_to_fifo(dsi, xfer);
+ 
+-	if (xfer->packet.payload_length || xfer->rx_len)
++	if (xfer->packet.payload_length || xfer->rx_len || xfer->wait_header_empty)
+ 		return;
+ 
+ 	xfer->result = 0;
+@@ -1362,7 +1365,7 @@
+ 		goto again;
+ }
+ 
+-static bool samsung_dsim_transfer_finish(struct samsung_dsim *dsi)
++static bool samsung_dsim_transfer_finish(struct samsung_dsim *dsi, u32 status)
+ {
+ 	struct samsung_dsim_transfer *xfer;
+ 	unsigned long flags;
+@@ -1388,6 +1391,16 @@
+ 	if (xfer->tx_done != xfer->packet.payload_length)
+ 		return true;
+ 
++	if (xfer->wait_header_empty) {
++		if (!(status & DSIM_INT_SFR_HDR_FIFO_EMPTY))
++			return false;
++		dev_info(dsi->dev, "KLIMT-DSIM maximum-return header sent irq=%#x status=%#x\n",
++			 status, samsung_dsim_read(dsi, DSIM_STATUS_REG));
++	}
++
++	if (dsi->exynos5420_mic && xfer->rx_len && !(status & DSIM_INT_RX_DONE))
++		return false;
++
+ 	if (xfer->rx_done != xfer->rx_len)
+ 		samsung_dsim_read_from_fifo(dsi, xfer);
+ 
+@@ -1510,10 +1523,11 @@
+ 	}
+ 
+ 	if (!(status & (DSIM_INT_RX_DONE | DSIM_INT_SFR_FIFO_EMPTY |
+-			DSIM_INT_PLL_STABLE)))
++			DSIM_INT_PLL_STABLE)) &&
++	    !(dsi->exynos5420_mic && (status & DSIM_INT_SFR_HDR_FIFO_EMPTY)))
+ 		return IRQ_HANDLED;
+ 
+-	if (samsung_dsim_transfer_finish(dsi))
++	if (samsung_dsim_transfer_finish(dsi, status))
+ 		samsung_dsim_transfer_start(dsi);
+ 
+ 	return IRQ_HANDLED;
+@@ -1984,6 +1998,8 @@
+ 	xfer.rx_len = msg->rx_len;
+ 	xfer.rx_payload = msg->rx_buf;
+ 	xfer.flags = msg->flags;
++	xfer.wait_header_empty = dsi->exynos5420_mic &&
++		msg->type == MIPI_DSI_SET_MAXIMUM_RETURN_PACKET_SIZE;
+ 
+ 	ret = samsung_dsim_transfer(dsi, &xfer);
+ 	return (ret < 0) ? ret : xfer.rx_done;
+--- a/include/drm/bridge/samsung-dsim.h
++++ /home/harry/android/galaxy-tab-s/evidence/2026-11-21-dsim-header43.F9NVeA/exynos-mic/include/drm/bridge/samsung-dsim.h	2026-11-21 00:28:03.124213599 -0800
+@@ -43,6 +43,7 @@
+ 	struct completion completed;
+ 	int result;
+ 	struct mipi_dsi_packet packet;
++	bool wait_header_empty;
+ 	u16 flags;
+ 	u16 tx_done;
+ 

@@ -67,3 +67,11 @@ The trial 41 source patch reproduced the linked driver's source with zero fuzz. 
 The SM-T700 physical readback matched the stock CLKCTRL `0x91f80008`, ESCMODE `0x00200000`, TIMEOUT `0x00ffffff` and PLLCTRL `0x00806400`. Before the first ID request, Linux read STATUS `0x80100400`; the stock capture before the preceding maximum-return command had STATUS `0x8010040f`. The two observations bracket different points in the transaction. Linux still timed out on DCS 0x04. The stock driver waits for the header FIFO to drain for the maximum-return packet, while Linux 6.12 completes a short write upon placing the header in the FIFO. The next diagnostic measures that completion interrupt.
 
 The patch applies with zero fuzz, all three exact packed replays passed, and the live USB ACM log and three matching retained reads showed the Exynos framebuffer and the DCS timeout. Software returned to TWRP. The full BOOT readback was `87b21a9315796b9e58843eaef205586fb78f0c32994046cb0e5f6f3b4c4a3b04`, and original RECOVERY matched. SYSTEM and EFS were clean and had unchanged payload hashes, with only the familiar six primary filesystem metadata bytes changed.
+
+## Short packet completion and RX interrupt, trial 43
+
+[The header completion probe](klimt-dsim-short-header.patch) waits for the Exynos5420 MIC host’s actual header-empty interrupt after queuing a maximum-return packet. On this host, processing a pending read also requires RX_DONE. This avoids initiating another DCS transfer in response to an unrelated transmit interrupt.
+
+Both maximum-return packets completed on the physical SM-T700 with header-empty interrupts `0x10000000` and `0x11000000`. STATUS `0x8010040f` before the first DCS ID request matched the standing link state in the successful Samsung capture. Both DCS attempts still timed out without a receive interrupt. The next diagnostic separates LP-11 setup, panel reset and the request for the high-speed clock.
+
+The unchanged DTB and all three complete packed-image replays passed. Live ACM and three retained-console reads agreed. TWRP returned in software. Full BOOT readback was `83edf59dcd8f1b398374caafa3baa788834a26b371f39a972d2128efffe38e3c`. Original RECOVERY matched, and the clean SYSTEM and EFS payloads retained their hashes.
