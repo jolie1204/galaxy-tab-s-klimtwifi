@@ -1,0 +1,228 @@
+--- a/drivers/gpu/drm/panel/panel-samsung-s6e3ha1-probe.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6e3ha1-probe.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+-/* SM-T700 S6E3HA1 link probe. No display-on or brightness commands. */
++/* SM-T700 S6E3HA1 2-nit framebuffer diagnostic. */
+ 
+ #include <linux/delay.h>
+ #include <linux/gpio/consumer.h>
+@@ -73,6 +73,150 @@
+ 	return dsi->host->ops->transfer(dsi->host, &msg);
+ }
+ 
++struct s6e3ha1_command {
++	const u8 *data;
++	size_t size;
++	unsigned int delay_ms;
++};
++#define PANEL_COMMAND(seq, delay) { seq, ARRAY_SIZE(seq), delay }
++
++static int s6e3ha1_prepare_2nit(struct s6e3ha1_probe *ctx)
++{
++	static const u8 test_f0_on[] = { 0xf0, 0x5a, 0x5a };
++	static const u8 test_f0_off[] = { 0xf0, 0xa5, 0xa5 };
++	static const u8 test_fc_on[] = { 0xfc, 0x5a, 0x5a };
++	static const u8 test_fc_off[] = { 0xfc, 0xa5, 0xa5 };
++	static const u8 tear[] = { 0x35, 0x00 };
++	static const u8 single_dsi_1[] = { 0xf2, 0x07, 0x48 };
++	static const u8 single_dsi_2[] = { 0xf9, 0x09 };
++	static const u8 self_refresh[] = { 0xb9, 0x08 };
++	static const u8 sleep_out[] = { 0x11 };
++	static const u8 touch_hsync[] = { 0xbd, 0x85 };
++	static const u8 pentile[] = { 0xc0, 0x00, 0x0f, 0xd8, 0xd8 };
++	static const u8 write_at_33[] = { 0xb0, 0x20 };
++	static const u8 poc[] = { 0xfe, 0x08 };
++	static const u8 margin[] = { 0xff, 0x00, 0x00, 0x00, 0x08 };
++#include "klimt-panel-2nit-gamma.h"
++	static const u8 aor_2nit[] = { 0xb2, 0x09, 0xe3 };
++	static const u8 elvss_2nit[] = { 0xb6, 0x9c, 0x13 };
++	static const u8 elvss_global[] = { 0xb0, 0x14 };
++	static const u8 acl_off[] = { 0x55, 0x00 };
++	static const u8 acl_avg_off[] = { 0xb5, 0x41 };
++	static const u8 temperature_global[] = { 0xb0, 0x05 };
++	static const u8 temperature_25c[] = { 0xb8, 0x19 };
++	static const u8 gamma_update[] = { 0xf7, 0x03 };
++	static const u8 gamma_latch[] = { 0xf7, 0x00 };
++	u8 elvss_normal[] = { 0xb6, 0 };
++	u8 elvss[21];
++	const struct s6e3ha1_command commands[] = {
++		PANEL_COMMAND(tear, 0),
++		PANEL_COMMAND(single_dsi_1, 0),
++		PANEL_COMMAND(single_dsi_2, 0),
++		PANEL_COMMAND(self_refresh, 0),
++		PANEL_COMMAND(sleep_out, 120),
++		PANEL_COMMAND(single_dsi_1, 0),
++		PANEL_COMMAND(single_dsi_2, 0),
++		PANEL_COMMAND(self_refresh, 0),
++		PANEL_COMMAND(touch_hsync, 0),
++		PANEL_COMMAND(pentile, 0),
++		PANEL_COMMAND(write_at_33, 0),
++		PANEL_COMMAND(poc, 0),
++		PANEL_COMMAND(margin, 0),
++		PANEL_COMMAND(gamma_2nit, 0),
++		PANEL_COMMAND(aor_2nit, 0),
++		PANEL_COMMAND(elvss_2nit, 0),
++		PANEL_COMMAND(elvss_global, 0),
++		PANEL_COMMAND(elvss_normal, 0),
++		PANEL_COMMAND(acl_off, 0),
++		PANEL_COMMAND(acl_avg_off, 0),
++		PANEL_COMMAND(temperature_global, 0),
++		PANEL_COMMAND(temperature_25c, 0),
++		PANEL_COMMAND(gamma_update, 0),
++		PANEL_COMMAND(gamma_latch, 0),
++	};
++	struct mipi_dsi_device *dsi = ctx->dsi;
++	int i, ret, close;
++
++	ret = mipi_dsi_dcs_write_buffer(dsi, test_f0_on, sizeof(test_f0_on));
++	if (ret < 0)
++		return ret;
++	ret = mipi_dsi_dcs_write_buffer(dsi, test_fc_on, sizeof(test_fc_on));
++	if (ret < 0)
++		goto lock_f0;
++	ret = mipi_dsi_set_maximum_return_packet_size(dsi, sizeof(elvss));
++	if (ret < 0)
++		goto lock_keys;
++	ret = mipi_dsi_dcs_read(dsi, 0xb6, elvss, sizeof(elvss));
++	if (ret != sizeof(elvss)) {
++		dev_err(&dsi->dev, "KLIMT-PANEL factory ELVSS read returned %d\n", ret);
++		ret = ret < 0 ? ret : -EIO;
++		goto lock_keys;
++	}
++	elvss_normal[1] = elvss[sizeof(elvss) - 1];
++	for (i = 0; i < ARRAY_SIZE(commands); i++) {
++		const struct s6e3ha1_command *cmd = &commands[i];
++
++		ret = mipi_dsi_dcs_write_buffer(dsi, cmd->data, cmd->size);
++		if (ret < 0) {
++			dev_err(&dsi->dev, "KLIMT-PANEL setup command %#x failed: %d\n",
++				cmd->data[0], ret);
++			goto lock_keys;
++		}
++		if (cmd->delay_ms)
++			msleep(cmd->delay_ms);
++	}
++	ret = 0;
++
++lock_keys:
++	close = mipi_dsi_dcs_write_buffer(dsi, test_fc_off, sizeof(test_fc_off));
++	if (!ret && close < 0)
++		ret = close;
++lock_f0:
++	close = mipi_dsi_dcs_write_buffer(dsi, test_f0_off, sizeof(test_f0_off));
++	return ret ? ret : min(close, 0);
++}
++
++static int s6e3ha1_enable_fixed_output(struct drm_panel *panel)
++{
++	struct mipi_dsi_device *dsi = to_s6e3ha1(panel)->dsi;
++	u8 power_mode;
++	int ret;
++
++	msleep(16);
++	ret = mipi_dsi_dcs_set_display_on(dsi);
++	if (ret < 0)
++		return ret;
++
++	msleep(32);
++	ret = mipi_dsi_set_maximum_return_packet_size(dsi, 1);
++	if (ret < 0)
++		goto display_off;
++	ret = mipi_dsi_dcs_get_power_mode(dsi, &power_mode);
++	if (ret < 0)
++		goto display_off;
++
++	dev_info(&dsi->dev, "KLIMT-PANEL low-brightness power mode=%#x\n", power_mode);
++	if ((power_mode & (BIT(2) | BIT(4))) == (BIT(2) | BIT(4)))
++		return 0;
++	ret = -EIO;
++
++display_off:
++	mipi_dsi_dcs_set_display_off(dsi);
++	return ret;
++}
++
++static int s6e3ha1_disable_output(struct drm_panel *panel)
++{
++	struct mipi_dsi_device *dsi = to_s6e3ha1(panel)->dsi;
++	int ret;
++
++	ret = mipi_dsi_dcs_set_display_off(dsi);
++	msleep(10);
++	mipi_dsi_dcs_enter_sleep_mode(dsi);
++	msleep(120);
++	return ret;
++}
++
+ static int s6e3ha1_read_id(struct drm_panel *panel)
+ {
+ 	struct s6e3ha1_probe *ctx = to_s6e3ha1(panel);
+@@ -146,6 +290,11 @@
+ 		goto disable_rails;
+ 	}
+ 
++	ret = s6e3ha1_prepare_2nit(ctx);
++	if (ret < 0)
++		goto disable_rails;
++	dev_info(dev, "KLIMT-PANEL calibrated 2-nit setup complete\n");
++
+ 	return 0;
+ 
+ disable_rails:
+@@ -177,6 +326,8 @@
+ 
+ static const struct drm_panel_funcs s6e3ha1_panel_funcs = {
+ 	.prepare = s6e3ha1_read_id,
++	.enable = s6e3ha1_enable_fixed_output,
++	.disable = s6e3ha1_disable_output,
+ 	.unprepare = s6e3ha1_power_off,
+ 	.get_modes = s6e3ha1_get_modes,
+ };
+--- a/drivers/gpu/drm/bridge/samsung-dsim.c
++++ b/drivers/gpu/drm/bridge/samsung-dsim.c
+@@ -1396,10 +1396,14 @@
+ 	if (xfer->wait_header_empty) {
+ 		if (!(status & DSIM_INT_SFR_HDR_FIFO_EMPTY))
+ 			return false;
+-		dev_info(dsi->dev, "KLIMT-DSIM maximum-return header sent irq=%#x status=%#x\n",
++		dev_info(dsi->dev, "KLIMT-DSIM short command header sent irq=%#x status=%#x\n",
+ 			 status, samsung_dsim_read(dsi, DSIM_STATUS_REG));
+ 	}
+ 
++	if (dsi->exynos5420_mic && xfer->packet.payload_length &&
++	    !(status & DSIM_INT_SFR_FIFO_EMPTY))
++		return false;
++
+ 	if (dsi->exynos5420_mic && xfer->rx_len && !(status & DSIM_INT_RX_DONE))
+ 		return false;
+ 
+@@ -2011,8 +2015,8 @@
+ 	xfer.rx_len = msg->rx_len;
+ 	xfer.rx_payload = msg->rx_buf;
+ 	xfer.flags = msg->flags;
+-	xfer.wait_header_empty = dsi->exynos5420_mic &&
+-		msg->type == MIPI_DSI_SET_MAXIMUM_RETURN_PACKET_SIZE;
++	xfer.wait_header_empty = dsi->exynos5420_mic && !msg->rx_len &&
++		!xfer.packet.payload_length;
+ 
+ 	ret = samsung_dsim_transfer(dsi, &xfer);
+ 	return (ret < 0) ? ret : xfer.rx_done;
+--- a/drivers/gpu/drm/exynos/exynos_drm_fimd.c
++++ b/drivers/gpu/drm/exynos/exynos_drm_fimd.c
+@@ -1002,6 +1002,15 @@
+ 		fimd_enable_vblank(ctx->crtc);
+ 
+ 	fimd_commit(ctx->crtc);
++	if (of_machine_is_compatible("samsung,klimt-wifi")) {
++		void __iomem *vidcon1 = ctx->regs + ctx->driver_data->timing_base + VIDCON1;
++		u32 first = readl(vidcon1);
++
++		usleep_range(1000, 1500);
++		dev_info(ctx->dev, "KLIMT-FRAME FIMD vidcon0=%#x scanlines=%u/%u\n",
++			 readl(ctx->regs + VIDCON0), VIDCON1_LINECNT_GET(first),
++			 VIDCON1_LINECNT_GET(readl(vidcon1)));
++	}
+ }
+ 
+ static void fimd_atomic_disable(struct exynos_drm_crtc *crtc)

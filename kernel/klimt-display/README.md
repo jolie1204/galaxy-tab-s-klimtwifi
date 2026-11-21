@@ -83,3 +83,11 @@ The unchanged DTB and all three complete packed-image replays passed. Live ACM a
 On the SM-T700, LP-11 read back as STATUS `0x8010010f` with CLKCTRL `0x11f80008`. After the high-speed transition, CLKCTRL read `0x91f80008`. The panel generated RX_DONE at uptime 4.131 seconds and the driver read the physical panel ID `42:11:03`. Exynos DRM also registered its framebuffer. The trial stopped at communication with the panel and did not send display-on or brightness commands.
 
 The source patch applied with zero fuzz and matched the linked source. The unchanged DTB and all three full packed replays passed. Live USB ACM and three retained-console reads agreed. The tablet returned to TWRP by software. The full BOOT readback was `cd99f43e90b1bcdfbf64146d85e581aa51f36c01afada7fad422c111fa971280`. RECOVERY matched its prior digest, and clean SYSTEM and EFS retained their payload hashes.
+
+## Panel on at the calibrated minimum, trial 45
+
+[The minimum-brightness patch](klimt-panel-2nit-awake.patch) applies the Samsung S6E3HA1 initialization sequence after the successful ID check. It uses the panel's own ELVSS response, its calibrated 2-nit gamma row, and the stock minimum AOR. The panel's unit-specific table stays local. Generate `drivers/gpu/drm/panel/klimt-panel-2nit-gamma.h` with [the gamma extractor](extract-2nit-gamma.py) and a complete `gamma_table` dump from the working Samsung driver on the same panel. The legacy `gamma_table` attribute writes the table into its kernel log. Save just one complete 63-row dump.
+
+The physical panel reported DCS power mode `0x9c` after display-on. FIMD reported `VIDCON0=0x3` and moved from scanline 3 to 298 in the observed interval. The physical framebuffer registered. The optional RGB test pattern's format check did not match, so this run establishes panel power and active scanout. Android launcher pixels and direct visual confirmation remain open.
+
+Zero-fuzz patch replay with the privately generated header reproduced the built panel, DSIM and FIMD source. The board DTB and all three complete packed replays passed. Live ACM and three retained-console readings agreed. The tablet returned to TWRP in software. Full BOOT readback was `293a6c104676d8a3efb23bd7955e4ff82142f2e6ffdfd8200b2f01e1ef74edf4`. RECOVERY matched its prior digest and SYSTEM/EFS payload hashes stayed the same.
