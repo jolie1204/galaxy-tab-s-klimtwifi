@@ -1,0 +1,15 @@
+--- a/klimt-property.rc
++++ b/klimt-property.rc
+@@ -137,10 +137,8 @@
+     mkdir /data/misc/installd 0700 root root
+     mkdir /data/misc/user 0771 root root
+     mkdir /data/resource-cache 0771 system system encryption=None
+-    mkdir /data/system_ce 0770 system system encryption=None
+-    mkdir /data/system_ce/0 0770 system system
+-    mkdir /data/system_de 0770 system system encryption=None
+-    mkdir /data/system_de/0 0770 system system
++    mkdir /data/system_ce 0550 system system encryption=None
++    mkdir /data/system_de 0550 system system encryption=None
+     mkdir /data/misc/keystore 0700 keystore keystore
+     mkdir /data/anr 0775 system system
+     mkdir /data/tombstones 0775 system system
