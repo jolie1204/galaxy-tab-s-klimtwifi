@@ -1,0 +1,11 @@
+--- a/arch/arm/boot/dts/samsung/exynos5420-klimt-wifi.dts
++++ b/arch/arm/boot/dts/samsung/exynos5420-klimt-wifi.dts
+@@ -83,6 +83,8 @@
+ 
+ &dsi {
+ 	compatible = "samsung,exynos5420-mipi-dsi";
++	/* The Exynos5420 MIPI provider exposes DSIM1 at index 3. */
++	phys = <&mipi_phy 3>;
+ 	power-domains = <&disp_pd>;
+ 	vddcore-supply = <&ldo6_reg>;
+ 	vddio-supply = <&ldo7_reg>;

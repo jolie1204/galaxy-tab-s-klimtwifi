@@ -1,0 +1,71 @@
+--- a/drivers/gpu/drm/exynos/exynos_drm_fimd.c
++++ b/drivers/gpu/drm/exynos/exynos_drm_fimd.c
+@@ -12,6 +12,7 @@
+ #include <linux/kernel.h>
+ #include <linux/mfd/syscon.h>
+ #include <linux/of.h>
++#include <linux/delay.h>
+ #include <linux/platform_device.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/regmap.h>
+@@ -361,6 +362,51 @@
+ 	writel(val, ctx->regs + SHADOWCON);
+ }
+ 
++static void klimt_fimd_log_handoff(struct fimd_context *ctx)
++{
++	void __iomem *vidcon1 = ctx->regs + ctx->driver_data->timing_base + VIDCON1;
++	u32 timing_before, vidcon0;
++	unsigned int win;
++	int ret;
++
++	if (!of_machine_is_compatible("samsung,klimt-wifi"))
++		return;
++
++	ret = pm_runtime_resume_and_get(ctx->dev);
++	if (ret < 0)
++		goto report;
++
++	ret = clk_prepare_enable(ctx->bus_clk);
++	if (ret)
++		goto put_pm;
++
++	ret = clk_prepare_enable(ctx->lcd_clk);
++	if (ret)
++		goto disable_bus;
++
++	timing_before = readl(vidcon1);
++	vidcon0 = readl(ctx->regs + VIDCON0);
++	usleep_range(1000, 1200);
++	dev_info(ctx->dev, "KLIMT-SCANOUT firmware vidcon0=%#x lines=%u/%u\n",
++		 vidcon0, VIDCON1_LINECNT_GET(timing_before),
++		 VIDCON1_LINECNT_GET(readl(vidcon1)));
++
++	for (win = 0; win < WINDOWS_NR; win++)
++		dev_info(ctx->dev, "KLIMT-SCANOUT win=%u control=%#x start=%#x end=%#x\n",
++			 win, readl(ctx->regs + WINCON(win)),
++			 readl(ctx->regs + VIDWx_BUF_START(win, 0)),
++			 readl(ctx->regs + VIDW_BUF_END(win)));
++
++	clk_disable_unprepare(ctx->lcd_clk);
++disable_bus:
++	clk_disable_unprepare(ctx->bus_clk);
++put_pm:
++	pm_runtime_put(ctx->dev);
++report:
++	if (ret)
++		dev_warn(ctx->dev, "KLIMT-SCANOUT firmware snapshot error %d\n", ret);
++}
++
+ static int fimd_clear_channels(struct exynos_drm_crtc *crtc)
+ {
+ 	struct fimd_context *ctx = crtc->ctx;
+@@ -1150,6 +1196,8 @@
+ 	if (ctx->encoder)
+ 		exynos_dpi_bind(drm_dev, ctx->encoder);
+ 
++	klimt_fimd_log_handoff(ctx);
++
+ 	if (is_drm_iommu_supported(drm_dev)) {
+ 		int ret;
+ 

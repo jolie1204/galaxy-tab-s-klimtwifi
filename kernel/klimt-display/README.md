@@ -29,3 +29,9 @@ Trial 33 initialized the host at 512 MHz with escape divider 5. High-speed DCS I
 Apply [the receive diagnostics](klimt-dsi-rx-diagnostics.patch) after the link test patch. The live S6E3HA1 probe confirmed all three panel supplies enabled at 1.8, 3.0 and 1.6 V and reset deasserted. Both automatic and explicit bus turnaround timed out on DCS ID 0x04 with no receive interrupt. Data lane 0 had left stop state at the timeout in both cases. These observations locate the remaining failure on the DSI response path. They do not establish a root cause.
 
 Exynos DRM registration and software return to TWRP were again observed. Full BOOT and RECOVERY hashes matched, the SYSTEM and EFS payloads were unchanged past block zero, and their six changed ext4 metadata bytes match earlier recovery boots. Stock TWRP also exposes the separate bootloader framebuffer range `0x67000000–0x67f9ffff`. Which framebuffer the firmware left scanning is the next readback.
+
+## Firmware scanout and DSIM1 PHY index, trials 36–38
+
+[The FIMD snapshot patch](klimt-fimd-handoff.patch) reads the physical controller before a Linux modeset. The measured SM-T700 normal kernel handoff showed VIDCON0, all five window control and buffer address registers, and both line counter samples at zero. This did not support using the reserved bootloader framebuffer with simpledrm on the current boot path.
+
+[The Klimt PHY override](klimt-dsim1-phy.patch) changes only the board's DSIM1 PHY index from 1 to 3. In the Exynos5420 provider, index 1 controls DSIM0 at PMU offset `0x714` and index 3 controls DSIM1 at `0x718`, matching the Samsung board's downstream selection. The flattened tree had exactly one changed field. The 512 MHz host link and Exynos framebuffer still registered on the SM-T700, and DCS ID still timed out. TWRP returned in software. The follow-up checks PMU power and reset order separately.
