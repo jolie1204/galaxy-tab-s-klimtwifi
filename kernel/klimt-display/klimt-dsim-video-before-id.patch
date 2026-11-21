@@ -1,0 +1,22 @@
+--- a/drivers/gpu/drm/bridge/samsung-dsim.c
++++ b/drivers/gpu/drm/bridge/samsung-dsim.c
+@@ -1951,6 +1951,19 @@
+ 	if (ret)
+ 		return ret;
+ 
++	if (dsi->exynos5420_mic && dsi->mode.clock &&
++	    msg->type == MIPI_DSI_DCS_READ && msg->tx_len == 1 &&
++	    ((const u8 *)msg->tx_buf)[0] == MIPI_DCS_GET_DISPLAY_ID &&
++	    !(dsi->state & DSIM_STATE_VIDOUT_AVAILABLE)) {
++		samsung_dsim_set_display_mode(dsi);
++		samsung_dsim_set_display_enable(dsi, true);
++		dsi->state |= DSIM_STATE_VIDOUT_AVAILABLE;
++		dev_info(dsi->dev, "KLIMT-DSIM video-before-read mdresol=%#x cfg=%#x mic=%#x\n",
++			 samsung_dsim_read(dsi, DSIM_MDRESOL_REG),
++			 samsung_dsim_read(dsi, DSIM_CONFIG_REG),
++			 readl(dsi->reg_base + EXYNOS5420_DSIM_MIC_CTRL));
++	}
++
+ 	ret = mipi_dsi_create_packet(&xfer.packet, msg);
+ 	if (ret < 0)
+ 		return ret;

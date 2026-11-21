@@ -41,3 +41,21 @@ Exynos DRM registration and software return to TWRP were again observed. Full BO
 [The board-scoped diagnostic](klimt-phy-power-order.patch) follows the Samsung driver's power-before-master-reset sequence for the valid DSIM1 PHY reference. The SM-T700 read back PMU register `0x718` as `0x0 → 0x1 → 0x5` during the cold transition. The panel ID read still timed out. Exynos framebuffer registration and the bounded software return to TWRP continued to work.
 
 The full BOOT and original RECOVERY hashes matched. Both SYSTEM and EFS were clean and retained their payload hashes. Only the familiar primary ext4 mount and lifetime-write metadata changed. The follow-up compares live DSIM register values with the working vendor path.
+
+## DSIM video mode and stock comparison, trials 40 and 41
+
+[The video timing probe](klimt-dsim-video-before-id.patch) programs the Exynos5420 MIC video settings and asserts DSIM standby before the S6E3HA1 DCS ID request. The Samsung driver sets video timings before panel activation. This diagnostic leaves panel display-on and brightness commands disabled.
+
+The SM-T700 read back MDRESOL `0x8a000320` for the MIC-compressed width of 800 by 2560 rows, CONFIG `0x1640707f`, and MIC_CTRL `0x234f02` before reading DCS 0x04. Both bus turnaround attempts still timed out. Exynos framebuffer registration and the software return to TWRP were reproduced.
+
+The stock control boot used the matching 3.4.113 Samsung source and RAM-only userspace. The Samsung `/proc/sec_log` ring retained the two DSIM snapshots immediately before the physical panel returned `42:11:03` at 2.627 seconds. Both kernels used the same video and D-PHY register values. These values differed around the request.
+
+| DSIM register | Successful stock read | Linux 6.12 trial 41 |
+| --- | --- | --- |
+| CLKCTRL | `0x91f80008` | `0x91f80005` |
+| ESCMODE | `0x00200000` | `0x01e00000` |
+| INTMSK | `0x8a33ffff` | `0x8b337fff` |
+
+The successful path used an escape divider of 8 (8 MHz) and a stop-state counter of 1. The 6.12 test used a divider of 5 (12.8 MHz) and a counter of 15. The control returned to TWRP in software and the verified 6.12 BOOT was restored.
+
+The trial 41 source patch reproduced the linked driver's source with zero fuzz. The DTB was unchanged and all three packed-image replays passed. The full BOOT readback and subsequent restore both matched `f9d5ba01baaaba21a1e0b2d2a3d945250dad17c8a752b4760fb6b5d8f4d72372`. RECOVERY matched the original digest in both trials. SYSTEM and EFS retained their payload hashes and reported clean. Only six primary ext4 metadata bytes changed on each.
