@@ -1,0 +1,117 @@
+--- a/libs/hwui/renderthread/VulkanManager.cpp
++++ b/libs/hwui/renderthread/VulkanManager.cpp
+@@ -204,6 +204,7 @@
+     GET_INST_PROC(GetPhysicalDeviceFeatures2);
+     GET_INST_PROC(GetPhysicalDeviceImageFormatProperties2);
+     GET_INST_PROC(GetPhysicalDeviceProperties);
++    GET_INST_PROC(GetPhysicalDeviceExternalSemaphoreProperties);
+     GET_INST_PROC(GetPhysicalDeviceQueueFamilyProperties);
+
+     uint32_t gpuCount;
+@@ -278,7 +279,21 @@
+                       mInstanceExtensions.data(), mDeviceExtensions.size(),
+                       mDeviceExtensions.data());
+
+-    LOG_ALWAYS_FATAL_IF(!grExtensions.hasExtension(VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME, 1));
++    if (grExtensions.hasExtension(VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME, 1)) {
++        const VkPhysicalDeviceExternalSemaphoreInfo syncFdInfo = {
++                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_SEMAPHORE_INFO,
++                .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT,
++        };
++        VkExternalSemaphoreProperties syncFdProperties = {
++                .sType = VK_STRUCTURE_TYPE_EXTERNAL_SEMAPHORE_PROPERTIES,
++        };
++        mGetPhysicalDeviceExternalSemaphoreProperties(mPhysicalDevice, &syncFdInfo,
++                                                      &syncFdProperties);
++        mCanImportSyncFd = syncFdProperties.externalSemaphoreFeatures &
++                VK_EXTERNAL_SEMAPHORE_FEATURE_IMPORTABLE_BIT;
++        mCanExportSyncFd = syncFdProperties.externalSemaphoreFeatures &
++                VK_EXTERNAL_SEMAPHORE_FEATURE_EXPORTABLE_BIT;
++    }
+
+     memset(&features, 0, sizeof(VkPhysicalDeviceFeatures2));
+     features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+@@ -565,10 +580,12 @@
+             sync_file_info_free(finfo);
+         }
+         if (isSignalPending) {
+-            int fence_clone = dup(bufferInfo->dequeue_fence);
++            int fence_clone = mCanImportSyncFd ? dup(bufferInfo->dequeue_fence) : -1;
+             if (fence_clone == -1) {
+-                ALOGE("dup(fence) failed, stalling until signalled: %s (%d)", strerror(errno),
+-                      errno);
++                if (mCanImportSyncFd) {
++                    ALOGE("dup(fence) failed, stalling until signalled: %s (%d)", strerror(errno),
++                          errno);
++                }
+                 sync_wait(bufferInfo->dequeue_fence, -1 /* forever */);
+             } else {
+                 VkSemaphoreCreateInfo semaphoreInfo;
+@@ -651,7 +668,7 @@
+     sp<SharedSemaphoreInfo> sharedSemaphore;
+     GrFlushInfo flushInfo;
+
+-    {
++    if (mCanExportSyncFd) {
+         VkExportSemaphoreCreateInfo exportInfo;
+         exportInfo.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO;
+         exportInfo.pNext = nullptr;
+@@ -713,9 +730,14 @@
+         int fenceFd = -1;
+         VkResult err = mGetSemaphoreFdKHR(mDevice, &getFdInfo, &fenceFd);
+         ALOGE_IF(VK_SUCCESS != err, "VulkanManager::swapBuffers(): Failed to get semaphore Fd");
+-        drawResult.presentFence.reset(fenceFd);
++        if (err == VK_SUCCESS) {
++            drawResult.presentFence.reset(fenceFd);
++        } else {
++            mQueueWaitIdle(mGraphicsQueue);
++        }
+     } else {
+-        ALOGE("VulkanManager::finishFrame(): Semaphore submission failed");
++        ALOGE_IF(mCanExportSyncFd, "VulkanManager::finishFrame(): Semaphore submission failed");
++        // Without a sync FD, finish the render before returning the buffer to the consumer.
+         mQueueWaitIdle(mGraphicsQueue);
+     }
+
+@@ -764,6 +786,10 @@
+         return INVALID_OPERATION;
+     }
+
++    if (!mCanImportSyncFd) {
++        return sync_wait(fence, -1) == 0 ? OK : -errno;
++    }
++
+     // Block GPU on the fence.
+     int fenceFd = ::dup(fence);
+     if (fenceFd == -1) {
+@@ -815,6 +841,10 @@
+         ALOGE("VulkanManager::createReleaseFence: VkDevice not initialized");
+         return INVALID_OPERATION;
+     }
++    if (!mCanExportSyncFd) {
++        grContext->flush();
++        return grContext->submit(GrSyncCpu::kYes) ? OK : UNKNOWN_ERROR;
++    }
+
+     VkExportSemaphoreCreateInfo exportInfo;
+     exportInfo.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO;
+--- a/libs/hwui/renderthread/VulkanManager.h
++++ b/libs/hwui/renderthread/VulkanManager.h
+@@ -153,6 +153,8 @@
+     VkPtr<PFN_vkDestroyInstance> mDestroyInstance;
+     VkPtr<PFN_vkEnumeratePhysicalDevices> mEnumeratePhysicalDevices;
+     VkPtr<PFN_vkGetPhysicalDeviceProperties> mGetPhysicalDeviceProperties;
++    VkPtr<PFN_vkGetPhysicalDeviceExternalSemaphoreProperties>
++            mGetPhysicalDeviceExternalSemaphoreProperties;
+     VkPtr<PFN_vkGetPhysicalDeviceQueueFamilyProperties> mGetPhysicalDeviceQueueFamilyProperties;
+     VkPtr<PFN_vkGetPhysicalDeviceFeatures2> mGetPhysicalDeviceFeatures2;
+     VkPtr<PFN_vkGetPhysicalDeviceImageFormatProperties2> mGetPhysicalDeviceImageFormatProperties2;
+@@ -192,6 +194,8 @@
+     uint32_t mGraphicsQueueIndex;
+     VkQueue mGraphicsQueue = VK_NULL_HANDLE;
+     VkQueue mAHBUploadQueue = VK_NULL_HANDLE;
++    bool mCanImportSyncFd = false;
++    bool mCanExportSyncFd = false;
+
+     // Variables saved to populate VkFunctorInitParams.
+     static const uint32_t mAPIVersion = VK_MAKE_VERSION(1, 1, 0);

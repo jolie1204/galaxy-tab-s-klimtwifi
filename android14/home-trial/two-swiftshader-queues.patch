@@ -1,0 +1,6 @@
+--- a/src/Vulkan/VkPhysicalDevice.cpp
++++ b/src/Vulkan/VkPhysicalDevice.cpp
+@@ -2530 +2530,2 @@
+-	properties.queueCount = 1;
++	// HWUI uses independent render and hardware-buffer upload queues.
++	properties.queueCount = 2;
