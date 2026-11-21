@@ -1,0 +1,91 @@
+--- a/klimt-property.rc
++++ b/klimt-property.rc
+@@ -247,6 +247,8 @@
+     write /dev/kmsg "KLIMT-HOME RENDERER ${debug.hwui.renderer:-unset}"
+     write /dev/kmsg "KLIMT-HOME RESCUE ${persist.sys.disable_rescue:-unset}"
+     write /dev/kmsg "KLIMT-HOME TIMEOUT ${ro.hw_timeout_multiplier:-unset}"
++    setprop pm.dexopt.first-boot skip
++    write /dev/kmsg "KLIMT-HOME FIRST_DEXOPT ${pm.dexopt.first-boot:-unset}"
+     start zygote
+     start klimt-framework-poll
+
+@@ -667,3 +669,34 @@
+
+ on property:debug.klimt_user=*
+     write /dev/kmsg "KLIMT-HOME USER ${debug.klimt_user}"
++
++
++on property:debug.klimt_window_state=*
++    write /dev/kmsg "KLIMT-HOME WINDOW ${debug.klimt_window_state}"
++
++on property:debug.klimt_permission_process=*
++    write /dev/kmsg "KLIMT-HOME PERMISSION_START ${debug.klimt_permission_process}"
++
++on property:debug.klimt_perm_event_1=*
++    write /dev/kmsg "KLIMT-HOME PERMISSION_EVENT 1 ${debug.klimt_perm_event_1}"
++
++on property:debug.klimt_perm_event_2=*
++    write /dev/kmsg "KLIMT-HOME PERMISSION_EVENT 2 ${debug.klimt_perm_event_2}"
++
++on property:debug.klimt_perm_event_3=*
++    write /dev/kmsg "KLIMT-HOME PERMISSION_EVENT 3 ${debug.klimt_perm_event_3}"
++
++on property:debug.klimt_perm_event_4=*
++    write /dev/kmsg "KLIMT-HOME PERMISSION_EVENT 4 ${debug.klimt_perm_event_4}"
++
++on property:debug.klimt_perm_event_5=*
++    write /dev/kmsg "KLIMT-HOME PERMISSION_EVENT 5 ${debug.klimt_perm_event_5}"
++
++on property:debug.klimt_perm_event_6=*
++    write /dev/kmsg "KLIMT-HOME PERMISSION_EVENT 6 ${debug.klimt_perm_event_6}"
++
++on property:debug.klimt_perm_event_7=*
++    write /dev/kmsg "KLIMT-HOME PERMISSION_EVENT 7 ${debug.klimt_perm_event_7}"
++
++on property:debug.klimt_perm_event_8=*
++    write /dev/kmsg "KLIMT-HOME PERMISSION_EVENT 8 ${debug.klimt_perm_event_8}"
+--- a/system/bin/klimt-framework-poll.sh
++++ b/system/bin/klimt-framework-poll.sh
+@@ -83,6 +83,32 @@
+         /system/bin/toybox tail -n 1 | /system/bin/toybox cut -c1-86)
+     /system/bin/setprop debug.klimt_home "step=$cycle,activity=$activity,package=$package,window=$window,sf=$display,boot=${boot:-unset}"
+     /system/bin/setprop debug.klimt_java "${phase:-unreported}"
++    if [ "$activity" = 1 ] && [ $((cycle % 4)) -eq 0 ]; then
++        userstate=$(/system/bin/toybox timeout 4 /system/bin/am get-started-user-state 0 2>/dev/null)
++        available=$(/system/bin/getprop sys.user.0.ce_available)
++        /system/bin/setprop debug.klimt_user "${userstate:-unreported},ce=${available:-unset}"
++        flags=$(/system/bin/toybox timeout 5 /system/bin/dumpsys -t 4 window 2>/dev/null |
++            /system/bin/awk '/mDisplayEnabled=|mBootAnimationStopped=|mKeyguardDrawComplete=/ {
++                for (k=1; k<=NF; ++k) if ($k ~ /^m(SystemBooted|DisplayEnabled|BootAnimationStopped|KeyguardDrawComplete)=/) print $k
++            }' | /system/bin/toybox head -n 4 | /system/bin/toybox tr '\n' ',' | /system/bin/toybox cut -c1-88)
++        /system/bin/setprop debug.klimt_window_state "${flags:-unreported}"
++        found=$(/system/bin/toybox pidof com.google.android.permissioncontroller com.android.permissioncontroller)
++        /system/bin/setprop debug.klimt_permission_process "pid=${found:-absent}"
++        events=$(/system/bin/toybox timeout 5 /system/bin/logcat -b events -d -t 450 -v raw -s \
++            am_proc_start:I am_proc_bound:I am_proc_died:I am_anr:I am_create_service:I am_schedule_service_restart:I |
++            /system/bin/toybox grep -i 'permissioncontroller' | /system/bin/toybox tail -n 8)
++        if [ -n "$events" ] && [ "$events" != "${last_perm_events:-}" ]; then
++            printf '%s\n' "$events" | (
++                slot=0
++                while IFS= read -r line; do
++                    slot=$((slot + 1))
++                    detail=$(printf '%s' "$line" | /system/bin/toybox cut -c1-88)
++                    /system/bin/setprop "debug.klimt_perm_event_$slot" "$detail"
++                done
++            )
++            last_perm_events=$events
++        fi
++    fi
+     if [ "$cycle" -ge 16 ] && [ "$activity" = 1 ] && [ "${ui_captured:-0}" = 0 ]; then
+         ui=$(/system/bin/toybox timeout 8 /system/bin/logcat -b crash -d -v brief -s AndroidRuntime:E |
+             /system/bin/awk '\
+@@ -101,9 +127,6 @@
+                     /system/bin/setprop "$(printf 'debug.klimt_ui_%02d' "$i")" "+$more"
+                 fi
+             done
+-            userstate=$(/system/bin/toybox timeout 6 /system/bin/am get-started-user-state 0)
+-            available=$(/system/bin/getprop sys.user.0.ce_available)
+-            /system/bin/setprop debug.klimt_user "${userstate:-unreported},ce=${available:-unset}"
+             /system/bin/toybox timeout 8 /system/bin/logcat -b main -b system -d -v brief -s \
+                 HWUI:W OpenGLRenderer:W VulkanManager:W libEGL:W SurfaceFlinger:E Gralloc4:W | \
+                 /system/bin/toybox tail -n 6 | (
