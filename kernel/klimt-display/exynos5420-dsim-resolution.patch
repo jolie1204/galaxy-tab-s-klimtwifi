@@ -1,0 +1,171 @@
+diff --git a/Documentation/devicetree/bindings/display/bridge/samsung,mipi-dsim.yaml b/Documentation/devicetree/bindings/display/bridge/samsung,mipi-dsim.yaml
+index 4ed7a79..cf28b20 100644
+--- a/Documentation/devicetree/bindings/display/bridge/samsung,mipi-dsim.yaml
++++ b/Documentation/devicetree/bindings/display/bridge/samsung,mipi-dsim.yaml
+@@ -22,6 +22,7 @@ properties:
+           - samsung,exynos3250-mipi-dsi
+           - samsung,exynos4210-mipi-dsi
+           - samsung,exynos5410-mipi-dsi
++          - samsung,exynos5420-mipi-dsi
+           - samsung,exynos5422-mipi-dsi
+           - samsung,exynos5433-mipi-dsi
+           - fsl,imx8mm-mipi-dsim
+diff --git a/drivers/gpu/drm/bridge/samsung-dsim.c b/drivers/gpu/drm/bridge/samsung-dsim.c
+index b13c68c..6d2b3dc 100644
+--- a/drivers/gpu/drm/bridge/samsung-dsim.c
++++ b/drivers/gpu/drm/bridge/samsung-dsim.c
+@@ -408,7 +408,8 @@ static const struct samsung_dsim_driver_data exynos3_dsi_driver_data = {
+ 	.num_clks = 2,
+ 	.max_freq = 1000,
+ 	.wait_for_reset = 1,
+-	.num_bits_resol = 11,
++	.num_bits_hresol = 11,
++	.num_bits_vresol = 11,
+ 	.pll_p_offset = 13,
+ 	.reg_values = reg_values,
+ 	.pll_fin_min = 6,
+@@ -427,7 +428,8 @@ static const struct samsung_dsim_driver_data exynos4_dsi_driver_data = {
+ 	.num_clks = 2,
+ 	.max_freq = 1000,
+ 	.wait_for_reset = 1,
+-	.num_bits_resol = 11,
++	.num_bits_hresol = 11,
++	.num_bits_vresol = 11,
+ 	.pll_p_offset = 13,
+ 	.reg_values = reg_values,
+ 	.pll_fin_min = 6,
+@@ -444,7 +446,26 @@ static const struct samsung_dsim_driver_data exynos5_dsi_driver_data = {
+ 	.num_clks = 2,
+ 	.max_freq = 1000,
+ 	.wait_for_reset = 1,
+-	.num_bits_resol = 11,
++	.num_bits_hresol = 11,
++	.num_bits_vresol = 11,
++	.pll_p_offset = 13,
++	.reg_values = reg_values,
++	.pll_fin_min = 6,
++	.pll_fin_max = 12,
++	.m_min = 41,
++	.m_max = 125,
++	.min_freq = 500,
++};
++
++/* Exynos5420 keeps the original register offsets and extends VRESOL. */
++static const struct samsung_dsim_driver_data exynos5420_dsi_driver_data = {
++	.reg_ofs = exynos_reg_ofs,
++	.plltmr_reg = 0x58,
++	.num_clks = 2,
++	.max_freq = 1000,
++	.wait_for_reset = 1,
++	.num_bits_hresol = 11,
++	.num_bits_vresol = 12,
+ 	.pll_p_offset = 13,
+ 	.reg_values = reg_values,
+ 	.pll_fin_min = 6,
+@@ -461,7 +482,8 @@ static const struct samsung_dsim_driver_data exynos5433_dsi_driver_data = {
+ 	.num_clks = 5,
+ 	.max_freq = 1500,
+ 	.wait_for_reset = 0,
+-	.num_bits_resol = 12,
++	.num_bits_hresol = 12,
++	.num_bits_vresol = 12,
+ 	.pll_p_offset = 13,
+ 	.reg_values = exynos5433_reg_values,
+ 	.pll_fin_min = 6,
+@@ -478,7 +500,8 @@ static const struct samsung_dsim_driver_data exynos5422_dsi_driver_data = {
+ 	.num_clks = 2,
+ 	.max_freq = 1500,
+ 	.wait_for_reset = 1,
+-	.num_bits_resol = 12,
++	.num_bits_hresol = 12,
++	.num_bits_vresol = 12,
+ 	.pll_p_offset = 13,
+ 	.reg_values = exynos5422_reg_values,
+ 	.pll_fin_min = 6,
+@@ -495,7 +518,8 @@ static const struct samsung_dsim_driver_data imx8mm_dsi_driver_data = {
+ 	.num_clks = 2,
+ 	.max_freq = 2100,
+ 	.wait_for_reset = 0,
+-	.num_bits_resol = 12,
++	.num_bits_hresol = 12,
++	.num_bits_vresol = 12,
+ 	/*
+ 	 * Unlike Exynos, PLL_P(PMS_P) offset 14 is used in i.MX8M Mini/Nano/Plus
+ 	 * downstream driver - drivers/gpu/drm/bridge/sec-dsim.c
+@@ -514,6 +538,7 @@ samsung_dsim_types[DSIM_TYPE_COUNT] = {
+ 	[DSIM_TYPE_EXYNOS3250] = &exynos3_dsi_driver_data,
+ 	[DSIM_TYPE_EXYNOS4210] = &exynos4_dsi_driver_data,
+ 	[DSIM_TYPE_EXYNOS5410] = &exynos5_dsi_driver_data,
++	[DSIM_TYPE_EXYNOS5420] = &exynos5420_dsi_driver_data,
+ 	[DSIM_TYPE_EXYNOS5422] = &exynos5422_dsi_driver_data,
+ 	[DSIM_TYPE_EXYNOS5433] = &exynos5433_dsi_driver_data,
+ 	[DSIM_TYPE_IMX8MM] = &imx8mm_dsi_driver_data,
+@@ -985,7 +1010,7 @@ static int samsung_dsim_init_link(struct samsung_dsim *dsi)
+ static void samsung_dsim_set_display_mode(struct samsung_dsim *dsi)
+ {
+ 	struct drm_display_mode *m = &dsi->mode;
+-	unsigned int num_bits_resol = dsi->driver_data->num_bits_resol;
++	const struct samsung_dsim_driver_data *data = dsi->driver_data;
+ 	u32 reg;
+ 
+ 	if (dsi->mode_flags & MIPI_DSI_MODE_VIDEO) {
+@@ -1016,8 +1041,8 @@ static void samsung_dsim_set_display_mode(struct samsung_dsim *dsi)
+ 			| DSIM_MAIN_HSA(hsa);
+ 		samsung_dsim_write(dsi, DSIM_MSYNC_REG, reg);
+ 	}
+-	reg =  DSIM_MAIN_HRESOL(m->hdisplay, num_bits_resol) |
+-		DSIM_MAIN_VRESOL(m->vdisplay, num_bits_resol);
++	reg = DSIM_MAIN_HRESOL(m->hdisplay, data->num_bits_hresol) |
++	      DSIM_MAIN_VRESOL(m->vdisplay, data->num_bits_vresol);
+ 
+ 	samsung_dsim_write(dsi, DSIM_MDRESOL_REG, reg);
+ 
+diff --git a/drivers/gpu/drm/exynos/exynos_drm_dsi.c b/drivers/gpu/drm/exynos/exynos_drm_dsi.c
+index bf16dea..d550815 100644
+--- a/drivers/gpu/drm/exynos/exynos_drm_dsi.c
++++ b/drivers/gpu/drm/exynos/exynos_drm_dsi.c
+@@ -144,6 +144,11 @@ static const struct samsung_dsim_plat_data exynos5410_dsi_pdata = {
+ 	.host_ops = &exynos_dsi_exynos_host_ops,
+ };
+ 
++static const struct samsung_dsim_plat_data exynos5420_dsi_pdata = {
++	.hw_type = DSIM_TYPE_EXYNOS5420,
++	.host_ops = &exynos_dsi_exynos_host_ops,
++};
++
+ static const struct samsung_dsim_plat_data exynos5422_dsi_pdata = {
+ 	.hw_type = DSIM_TYPE_EXYNOS5422,
+ 	.host_ops = &exynos_dsi_exynos_host_ops,
+@@ -167,6 +172,10 @@ static const struct of_device_id exynos_dsi_of_match[] = {
+ 		.compatible = "samsung,exynos5410-mipi-dsi",
+ 		.data = &exynos5410_dsi_pdata,
+ 	},
++	{
++		.compatible = "samsung,exynos5420-mipi-dsi",
++		.data = &exynos5420_dsi_pdata,
++	},
+ 	{
+ 		.compatible = "samsung,exynos5422-mipi-dsi",
+ 		.data = &exynos5422_dsi_pdata,
+diff --git a/include/drm/bridge/samsung-dsim.h b/include/drm/bridge/samsung-dsim.h
+index 9764d6e..8b17c40 100644
+--- a/include/drm/bridge/samsung-dsim.h
++++ b/include/drm/bridge/samsung-dsim.h
+@@ -27,6 +27,7 @@ enum samsung_dsim_type {
+ 	DSIM_TYPE_EXYNOS3250,
+ 	DSIM_TYPE_EXYNOS4210,
+ 	DSIM_TYPE_EXYNOS5410,
++	DSIM_TYPE_EXYNOS5420,
+ 	DSIM_TYPE_EXYNOS5422,
+ 	DSIM_TYPE_EXYNOS5433,
+ 	DSIM_TYPE_IMX8MM,
+@@ -60,7 +61,8 @@ struct samsung_dsim_driver_data {
+ 	unsigned int min_freq;
+ 	unsigned int max_freq;
+ 	unsigned int wait_for_reset;
+-	unsigned int num_bits_resol;
++	unsigned int num_bits_hresol;
++	unsigned int num_bits_vresol;
+ 	unsigned int pll_p_offset;
+ 	const unsigned int *reg_values;
+ 	unsigned int pll_fin_min;
