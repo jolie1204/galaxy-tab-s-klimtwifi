@@ -1,0 +1,11 @@
+--- a/mount-trial.h
++++ b/mount-trial.h
+@@ -20,0 +21,2 @@
++
++#include "property-ramdisk.h"
+@@ -55,0 +58,3 @@
++    StageTrialFile("/klimt-property.rc", "/dev/klimt-property.rc");
++    StageTrialFile("/klimt-cgroups.json", "/dev/klimt-cgroups.json");
++    StageTrialFile("/klimt-cgroups.original", "/dev/klimt-cgroups.original");
+@@ -94,0 +100 @@
++    MountTrialCgroups();

@@ -1,0 +1,6 @@
+on early-init
+    mkdir /dev/cpuctl/klimt-check 0755 root root
+    mkdir /sys/fs/cgroup/klimt-check 0755 root root
+    setprop ro.klimt.trial ${ro.boot.klimt_trial}
+    setprop ro.klimt.trial already-used
+    write /dev/kmsg "KLIMT-PROP ECHO ${ro.klimt.trial:-unset} api=${ro.build.version.sdk:-unset} protocol=${ro.property_service.version:-unset}"

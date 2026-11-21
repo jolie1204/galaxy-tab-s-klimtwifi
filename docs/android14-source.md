@@ -4,6 +4,27 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## Cgroups and the Android property service, trial 22
+
+On November 20, 2026, the installed Android 14 init on the SM-T700 completed its cgroup setup and exercised its protocol 2 property service on Linux 6.12.118. The diagnostic used a minimal early-init action and kept MMC read-only. [Kernel configuration, ramdisk changes and probe](../android14/property-service-trial/README.md)
+
+| Kernel uptime | Physical evidence |
+| --- | --- |
+| 5.300 s | The installed init entered its second stage. |
+| 5.742 s | Init began its built-in cgroup setup. The diagnostic early-init action followed at 5.942 s. |
+| 5.955 s | The property socket server identified peer PID 1 and rejected its second write to the probe's write-once property. |
+| 5.957 s | Reading the property area returned the original run-specific value, SDK 34 and service protocol 2. |
+| 5.959 s | All six controller files resolved on the expected filesystems from the mount namespace of enforcing PID 1, in `u:r:init:s0`. |
+| 12.055 s | Linux issued a software restart to recovery. The host confirmed fresh TWRP 3.7.0_9-0 at 21:26:10 PST on the same port. |
+
+Five checked files were on cgroup v1 and covered block I/O throttling, CPU shares, utilization clamps, cpuset and memory limits. A child cgroup's freezer file was on v2. The positive QEMU run produced the same ordered verdicts. A control with the probe script omitted produced no echo or success verdict and requested recovery on its independent timeout.
+
+The real USB ACM capture contained 16,694 bytes. Three reads of TWRP's retained 29,179-byte console agreed. The 7,534,608-byte BOOT file had SHA-256 `7de6deebfb10c6350fbacaa3aa7d86a7d6290b4b054e38c254c7c0a51633e8e0`. The full 8 MiB BOOT partition matched `b456ecb38c7f957f9ca316c345b7b6925af593d7608f625dbee80df4d59b69f7` before the trial reboot and after recovery. The full RECOVERY partition matched its pre-trial digest.
+
+On each of SYSTEM and EFS, the only differences across the trial and TWRP return were six bytes in the primary ext4 superblock. They belonged to mount time, write time, mount count and lifetime KiB written. The remaining bytes of both complete partitions matched their pre-trial SHA-256 comparisons. Both filesystems reported clean in TWRP.
+
+The next hardware checkpoint is starting Android's `ueventd`, observing its coldboot device scan and verifying `ro.cold_boot_done=true` through the property service. Zygote, the framework, the launcher and workload performance remain untested on this kernel.
+
 ## SELinux and second-stage init on Linux 6.12, trial 21
 
 On November 20, 2026, the SM-T700 ran its installed Android 14 `/system/bin/init` through `selinux_setup` into `SecondStageMain` on Linux 6.12.118. The PC captured the following sequence over USB CDC ACM. TWRP's retained kernel console independently contained the same trial ID and sequence. [Diagnostic source and controls](../android14/policy-entry-trial/README.md)
@@ -20,7 +41,7 @@ The PC captured 12,502 bytes over ACM. Three reads of the 25,522-byte retained k
 
 Across the complete trial and TWRP return, 616,959 of 616,960 SYSTEM blocks and 5,119 of 5,120 EFS blocks matched their pre-trial SHA-256 at 4 KiB granularity. On each partition, only block zero differed. For SYSTEM, a byte comparison found six changed bytes in the primary ext4 superblock fields for mount time, write time, mount count and lifetime KiB written. For EFS the comparison identifies the first block, which contains the primary superblock. TWRP's kernel recorded mounts of both filesystems, and each superblock reported a clean filesystem and a last-write time during recovery startup.
 
-The installed policy (version 30) leaves two Linux 6.12 classes undefined, `mctp_socket` and `user_namespace`, along with the `bpf` and `checkpoint_restore` permissions in two capability classes. The kernel reported that access to these would be denied. A QEMU run allowed second-stage initialization to continue with an empty boot-script selection. Android attempted to mount CPU and memory cgroups that the virtual kernel did not provide. The physical trial kernel configuration also has CPU scheduling groups, cpusets, CPU accounting and the memory controller disabled. The next milestone is to reconcile the installed cgroup definitions with Linux 6.12 and verify the Android property service on hardware. Zygote, the framework and the launcher are outstanding.
+The installed policy (version 30) leaves two Linux 6.12 classes undefined, `mctp_socket` and `user_namespace`, along with the `bpf` and `checkpoint_restore` permissions in two capability classes. The kernel reported that access to these would be denied. A QEMU run allowed second-stage initialization to continue with an empty boot-script selection. Android attempted to mount CPU and memory cgroups that the virtual kernel did not provide. The physical trial kernel configuration also has CPU scheduling groups, cpusets, CPU accounting and the memory controller disabled. Trial 22 subsequently verified the cgroup mounts and the Android property service on hardware. Zygote, the framework and the launcher are outstanding.
 
 ## Android 14 first stage on Linux 6.12, trial 20
 
