@@ -65,3 +65,20 @@ Three packed-image emulator cases verified the handoff and complete expanded Ima
 The console contains the kernel release 6.12.118-klimt-adbreturn1, adbd startup, FunctionFS readiness, UDC binding and the USB trace ID 823845e47d797ebd. On the first SET_CONFIGURATION(1), FunctionFS accepted alternate setting zero, both 512-byte bulk endpoints enabled, and the DWC3 handler returned 0 in the configured state. EP0 IN started its status transfer at uptime 6.441029. The controller reported completion at 11.678345, about 5.24 seconds later, immediately before a new setup request. The host timed out. After a retry, GET_CONFIGURATION returned 1 and a new 18-byte device descriptor read succeeded. SET_CONFIGURATION(0) also timed out, but the next GET_CONFIGURATION returned 0. These observations narrow the failure to completion of the configuration handshake. They do not establish what happened on the wire. Authentication was not reached.
 
 The kernel logged its 120-second deadline and `Restarting system with command 'recovery'`. TWRP returned on the same port at 20:29:45 PST with a fresh boot ID. Both installed partition hashes matched. No Android data reset or RECOVERY flash was needed.
+
+### Authenticated USB ADB on Linux 6.12, trial 19
+
+On November 20, 2026 an authenticated SDK ADB shell on the SM-T700 returned `6.12.118-klimt-adbreturn1`, UID 2000 and uptime 6.83 seconds. The host requested the trial boot at 20:33:02 PST, observed the diagnostic on the original USB port at 20:33:20 and captured the shell reply in the same second. GET_CONFIGURATION returned 1. The host read a 15-byte BOS descriptor with one SuperSpeed capability and no USB 2.0 Extension capability.
+
+The inner zImage, expanded kernel, RAM userspace, ADB keys and trace configuration were identical to trial 18. The only decoded device-tree difference was `snps,usb2-gadget-lpm-disable` on the active DWC3 peripheral. The working vendor build selects CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE and clears the controller's LPM capability in that configuration. A new run ID was assigned to the outer decompressor. The two hardware runs support disabling USB 2 gadget link power management as a board-specific bring-up setting. Broader host compatibility, long-running connections and power consumption remain unmeasured.
+
+Apply the following overlay to the trial 18 diagnostic board DTB before appending it to the inner zImage. Then package the inner zImage and DTB in the vendor wrapper as in trial 17. The three outer-to-inner emulator checks passed and the expanded Image was byte-identical across the comparison. [Device-tree overlay](usb2-lpm-off.dts) · [Vendor-wrapper build](../decompressor/README.md#seventeenth-hardware-trial)
+
+```sh
+dtc -I dts -O dtb -o usb2-lpm-off.dtbo usb2-lpm-off.dts
+fdtoverlay -i trial18-klimt.dtb -o trial19-klimt.dtb usb2-lpm-off.dtbo
+```
+
+The authenticated shell captured the Linux kernel ring and block uevents. On the physical device Linux reported EFS on mmcblk0p3, BOOT on p9, RECOVERY on p10, SYSTEM on p18, CACHE on p19 and USERDATA on p21. The shell acknowledged a recovery request. The persistent console recorded that request, followed by the kernel restarting with command `recovery` at uptime 7.73 seconds. TWRP 3.7.0_9-0 returned at 20:33:42 PST on the original port with a fresh boot ID. Three identical reads of its 35,243-byte previous console gave SHA-256 `472b6819389c465a3663780855964f53fe01e33cae26937d0f1361de16bfeb50` with no reported errors.
+
+The 6,926,352-byte BOOT file had SHA-256 `78288b247916de18eab6932a3bd0a1439adc306fe0635ef5d3cfe883912926a2`. The full 8 MiB BOOT readback before boot and after return matched `478434c62d880cb23251629a3f39ecdf8512353368c4b3dc00886fcfe7fb6412`. The full RECOVERY digest also matched its prior value. This trial exercises RAM diagnostic userspace. Booting Android 14 first-stage init with this kernel is a separate milestone.

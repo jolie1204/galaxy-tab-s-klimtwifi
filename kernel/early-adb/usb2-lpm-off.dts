@@ -1,0 +1,11 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    fragment@0 {
+        target-path = "/soc/usb@12000000/usb@0";
+        __overlay__ {
+            snps,usb2-gadget-lpm-disable;
+        };
+    };
+};
