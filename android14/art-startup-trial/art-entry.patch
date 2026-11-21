@@ -1,0 +1,149 @@
+--- a/art-entry.h
++++ b/art-entry.h
+@@ -1,7 +1,9 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+-/* Bounded SM-T700 SDK and ART classpath diagnostic, included from selinuxfs.c. */
++/* Bounded SM-T700 ART initialization and artifact check diagnostic, included from selinuxfs.c. */
+ #include <crypto/sha2.h>
++#include <linux/binfmts.h>
+ #include <linux/magic.h>
++#include <trace/events/sched.h>
+ #include <linux/major.h>
+ #include <linux/mount.h>
+ #include <linux/nsproxy.h>
+@@ -12,7 +14,8 @@
+ static bool klimt_committed, klimt_default_ok, klimt_linker_ok, klimt_finished;
+ static struct mnt_namespace *klimt_bootstrap_ns, *klimt_default_ns;
+ static int klimt_actor;
+-static bool klimt_base_ok, klimt_before_ok;
++static bool klimt_base_ok, klimt_before_ok, klimt_cp_ok, klimt_art_ready;
++static int klimt_boot_pid, klimt_odrefresh_pid;
+ static char klimt_env_sha[65];
+ static const char klimt_exports[] = "/data/system/environ/classpath";
+ static char klimt_run[17];
+@@ -221,13 +224,6 @@
+ 		klimt_finish();
+ }
+ 
+-static void klimt_cp_skip(struct callback_head *work)
+-{
+-	pr_notice("KLIMT-CP SKIPPED run=%s absent=%u base=%u\n",
+-		  klimt_run, klimt_exports_absent(), klimt_base_ok && klimt_before_ok);
+-	klimt_finish();
+-}
+-
+ static bool klimt_jar_exists(const char *name)
+ {
+ 	struct path path;
+@@ -308,13 +304,80 @@
+ 	pr_notice("KLIMT-CP %s run=%s bytes=%zd sha256=%s parsed=%u env_match=%u enforcing=%u\n",
+ 		  pass ? "PASS" : "FAIL", klimt_run, bytes, hex, parsed,
+ 		  !!hex[0] && !strcmp(hex, klimt_env_sha), enforcing_enabled());
+-	klimt_finish();
++	klimt_cp_ok = pass;
++	if (!pass)
++		klimt_finish();
+ }
+ 
+ static struct callback_head klimt_cp_pre_work = { .func = klimt_cp_before };
+-static struct callback_head klimt_cp_skip_work = { .func = klimt_cp_skip };
+ static struct callback_head klimt_cp_post_work = { .func = klimt_cp_after };
+ 
++static void klimt_exec_observed(void *unused, struct task_struct *task, pid_t old_pid,
++				struct linux_binprm *bprm)
++{
++	const char *path = bprm->filename;
++	const char *domain;
++	const char *label;
++	int *actor;
++
++	if (!strcmp(path, "/apex/com.android.art/bin/art_boot")) {
++		domain = "u:r:art_boot:s0";
++		label = "art_boot";
++		actor = &klimt_boot_pid;
++	} else if (!strcmp(path, "/apex/com.android.art/bin/odrefresh")) {
++		domain = "u:r:odrefresh:s0";
++		label = "odrefresh";
++		actor = &klimt_odrefresh_pid;
++	} else {
++		return;
++	}
++	if (enforcing_enabled() && klimt_in_domain(domain) &&
++	    current->nsproxy->mnt_ns == READ_ONCE(klimt_default_ns)) {
++		WRITE_ONCE(*actor, task->tgid);
++		pr_notice("KLIMT-ART exec=%s pid=%d domain=%s enforcing=1\n",
++			  label, task->tgid, domain);
++	}
++}
++
++static int __init klimt_exec_observer_init(void)
++{
++	return register_trace_sched_process_exec(klimt_exec_observed, NULL);
++}
++late_initcall(klimt_exec_observer_init);
++
++static bool klimt_cache_absent(void)
++{
++	static const char name[] = "/data/misc/apexdata/com.android.art/dalvik-cache/cache-info.xml";
++	struct path path;
++	int err = kern_path(name, LOOKUP_NO_SYMLINKS, &path);
++
++	if (!err)
++		path_put(&path);
++	return err == -ENOENT;
++}
++
++static void klimt_art_before(struct callback_head *work)
++{
++	bool cache_absent = klimt_cache_absent();
++	bool clean = klimt_cp_ok && klimt_ram_data() && cache_absent &&
++		     !READ_ONCE(klimt_boot_pid) && !READ_ONCE(klimt_odrefresh_pid);
++
++	pr_notice("KLIMT-ART clean=%u cp=%u cache_absent=%u\n", clean, klimt_cp_ok, cache_absent);
++	if (!clean)
++		klimt_finish();
++}
++
++static void klimt_art_after(struct callback_head *work)
++{
++	pr_notice("KLIMT-ART checked run=%s art_pid=%d odr_pid=%d flags=%u ram=%u cache_absent=%u enforcing=%u\n",
++		  klimt_run, READ_ONCE(klimt_boot_pid), READ_ONCE(klimt_odrefresh_pid),
++		  klimt_art_ready, klimt_ram_data(), klimt_cache_absent(), enforcing_enabled());
++	klimt_finish();
++}
++
++static struct callback_head klimt_art_pre_work = { .func = klimt_art_before };
++static struct callback_head klimt_art_post_work = { .func = klimt_art_after };
++
+ void klimt_trial_log(const char *line)
+ {
+ 	char expected[112];
+@@ -356,9 +419,6 @@
+ 	snprintf(expected, sizeof(expected), "KLIMT-CP BEFORE %s api=34 r=unset s=unset t=unset u=unset ad=unset", klimt_run);
+ 	if (sysfs_streq(line, expected))
+ 		task_work_add(current, &klimt_cp_pre_work, TWA_RESUME);
+-	snprintf(expected, sizeof(expected), "KLIMT-CP SKIP %s", klimt_run);
+-	if (sysfs_streq(line, expected))
+-		task_work_add(current, &klimt_cp_skip_work, TWA_RESUME);
+ 	snprintf(expected, sizeof(expected), "KLIMT-CP END %s env=", klimt_run);
+ 	if (str_has_prefix(line, expected)) {
+ 		const char *hex = line + strlen(expected);
+@@ -367,4 +427,18 @@
+ 			memcpy(klimt_env_sha, hex, 64);
+ 		task_work_add(current, &klimt_cp_post_work, TWA_RESUME);
+ 	}
++	snprintf(expected, sizeof(expected),
++		 "KLIMT-ART BEFORE %s profile=unset stats=unset zygote=zygote32", klimt_run);
++	if (sysfs_streq(line, expected))
++		task_work_add(current, &klimt_art_pre_work, TWA_RESUME);
++	snprintf(expected, sizeof(expected),
++		 "KLIMT-ART FLAGS %s profile=true stats=true", klimt_run);
++	if (sysfs_streq(line, expected))
++		klimt_art_ready = true;
++	snprintf(expected, sizeof(expected), "KLIMT-ART END %s log=", klimt_run);
++	if (str_has_prefix(line, expected))
++		task_work_add(current, &klimt_art_post_work, TWA_RESUME);
++	snprintf(expected, sizeof(expected), "KLIMT-ART SKIP %s", klimt_run);
++	if (sysfs_streq(line, expected))
++		task_work_add(current, &klimt_art_post_work, TWA_RESUME);
+ }

@@ -4,6 +4,28 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## ART startup and boot artifact check, trial 28
+
+On November 20, 2026, the installed Android 14 ART startup service ran on the physical SM-T700 with Linux 6.12.118. This trial reused all 31 installed APEXes, the verified classpath and writable RAM /data. The userdebug launch shim invoked the stock artifact checker in its enforcing SELinux domain. [Trial source and verifier](../android14/art-startup-trial/README.md)
+
+| Kernel uptime | Physical observation |
+| --- | --- |
+| 18.618 s | The classpath was verified, the RAM cache-info file was absent, both ART flags were unset and the installed product selected `zygote32`. |
+| 18.696–18.789 s | Installed `art_boot` PID 199 ran in enforcing `u:r:art_boot:s0`, exited 0, and set the embedded profile and ART-managed file statistics flags to true. |
+| 18.919–19.289 s | The installed `odrefresh --check` PID 200 entered enforcing `u:r:odrefresh:s0` and exited 79. |
+| 20.197–20.199 s | The checker reported a userfaultfd GC precondition failure. The kernel still found no cache-info file. |
+| 26.722 s | The diagnostic requested a software recovery restart. |
+
+The installed `/system/product/etc/build.prop` sets `ro.dalvik.vm.enable_uffd_gc=true`, while both tested kernel configurations disable `CONFIG_USERFAULTFD`. Odrefresh therefore rejected the existing /system ARM boot-image set before checking system_server artifacts. The negative ARM QEMU control preserved the flags and skipped odrefresh. The positive control reproduced the hardware result. This was an artifact check only, with no dex2oat or odsign execution.
+
+USB ACM and three identical reads of the retained console agreed. TWRP 3.7.0_9-0 returned at 22:21:48 PST. The image measured 7,555,088 bytes with SHA-256 `b5b60518f85accbd3aaad23d1421976173b6092e681e3a38ba0688372cc9fe59`. The full 8 MiB BOOT readback matched `ab7bdb5de8df966e361dec801385467c6771168ccb76ff02622edee04cd9f39a` and the RECOVERY digest matched its previous value. The full SYSTEM and EFS reads differed only in six primary ext4 metadata bytes per partition. TWRP reported both filesystems clean.
+
+### Retest with userfaultfd
+
+Enabling `CONFIG_USERFAULTFD` resolved the precondition failure in two ARM QEMU comparisons and on the physical tablet. The only functional kernel configuration change was userfaultfd. On hardware, installed `art_boot` exited 0. Installed `odrefresh --check` accepted the existing /system ARM boot images and system_server artifacts. At uptime 20.379 s the probe confirmed both decisions, enforcing SELinux and an absent RAM cache-info file. Exit 79 remained because odrefresh still needs to generate the absent cache metadata. Recovery was requested at 26.722 s and TWRP returned at 22:30:15 PST.
+
+The 7,557,136-byte retest image had SHA-256 `308efd712125eace583bc8e7013f1cd08f7361924c720495acf53f33f0736d74`. The full BOOT readback matched `86b3f073acb58610e21e932cb306d2881efc17c9377ae6ca9cf344fc7742ca3e`. RECOVERY matched the existing hash, and complete SYSTEM and EFS comparisons again found only six ext4 metadata bytes changed on each. Positive and negative ARM QEMU controls and three packaged replays also passed. The next framework checkpoint is using the accepted artifacts to start Zygote and system_server. The installed display stack and the kernel panel path still need integration for launcher output.
+
 ## SDK extensions and ART classpath, trial 27
 
 On November 20, 2026, the installed Android 14 SDK Extensions APEX supplied both native one-shot services on the physical SM-T700 with Linux 6.12.118. The experiment reused the temporary writable tmpfs at /data and the installed enforcing policy. [Trial source and verifier](../android14/sdk-classpath-trial/README.md)
