@@ -9,7 +9,7 @@ parser.add_argument("previous_console", type=Path)
 args = parser.parse_args()
 log = args.previous_console.read_bytes()
 patterns = (
-    rb"(?m)^KLIMT-(?:612-(?:ENTRY|PRECACHE|POSTCACHE|INFLATED)|VENDOR-ENTRY) [0-9a-f]{16}(?=\r?$)",
+    rb"(?m)^KLIMT-(?:612-(?:ENTRY|PRECACHE|TABLEBUILT|POSTCACHE|INFLATED)|VENDOR-ENTRY) [0-9a-f]{16}(?=\r?$)",
     rb"Linux version 6\.12\.118-klimt-(?:early1|adbreturn1)(?=[ (])",
     rb"KLIMT-EARLY1 PID1 before USB 6\.12\.118-klimt-early1\b",
     rb"KLIMT-EARLY1 USB setup pid=\d+ 6\.12\.118-klimt-adbreturn1\b",
