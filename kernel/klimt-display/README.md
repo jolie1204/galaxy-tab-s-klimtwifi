@@ -35,3 +35,9 @@ Exynos DRM registration and software return to TWRP were again observed. Full BO
 [The FIMD snapshot patch](klimt-fimd-handoff.patch) reads the physical controller before a Linux modeset. The measured SM-T700 normal kernel handoff showed VIDCON0, all five window control and buffer address registers, and both line counter samples at zero. This did not support using the reserved bootloader framebuffer with simpledrm on the current boot path.
 
 [The Klimt PHY override](klimt-dsim1-phy.patch) changes only the board's DSIM1 PHY index from 1 to 3. In the Exynos5420 provider, index 1 controls DSIM0 at PMU offset `0x714` and index 3 controls DSIM1 at `0x718`, matching the Samsung board's downstream selection. The flattened tree had exactly one changed field. The 512 MHz host link and Exynos framebuffer still registered on the SM-T700, and DCS ID still timed out. TWRP returned in software. The follow-up checks PMU power and reset order separately.
+
+## Ordered PHY power and master reset, trial 39
+
+[The board-scoped diagnostic](klimt-phy-power-order.patch) follows the Samsung driver's power-before-master-reset sequence for the valid DSIM1 PHY reference. The SM-T700 read back PMU register `0x718` as `0x0 → 0x1 → 0x5` during the cold transition. The panel ID read still timed out. Exynos framebuffer registration and the bounded software return to TWRP continued to work.
+
+The full BOOT and original RECOVERY hashes matched. Both SYSTEM and EFS were clean and retained their payload hashes. Only the familiar primary ext4 mount and lifetime-write metadata changed. The follow-up compares live DSIM register values with the working vendor path.

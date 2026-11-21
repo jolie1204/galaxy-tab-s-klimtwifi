@@ -1,0 +1,52 @@
+--- a/drivers/phy/samsung/phy-exynos-mipi-video.c
++++ b/drivers/phy/samsung/phy-exynos-mipi-video.c
+@@ -229,9 +229,34 @@
+ {
+ 	struct regmap *enable_map = state->regmaps[data->enable_map];
+ 	struct regmap *resetn_map = state->regmaps[data->resetn_map];
++	bool power_first = on &&
++		data == &exynos5420_mipi_phy.phys[EXYNOS_MIPI_PHY_ID_DSIM1] &&
++		of_machine_is_compatible("samsung,klimt-wifi");
++	u32 before = 0, powered = 0, released = 0;
++	int ret = 0;
+ 
+ 	spin_lock(&state->slock);
+ 
++	if (power_first) {
++		ret = regmap_read(enable_map, data->enable_reg, &before);
++		if (ret)
++			goto unlock;
++		ret = regmap_update_bits(enable_map, data->enable_reg,
++					 data->enable_val, data->enable_val);
++		if (ret)
++			goto unlock;
++		ret = regmap_read(enable_map, data->enable_reg, &powered);
++		if (ret)
++			goto unlock;
++		ret = regmap_update_bits(resetn_map, data->resetn_reg,
++					 data->resetn_val, data->resetn_val);
++		if (ret)
++			goto unlock;
++		ret = regmap_read(resetn_map, data->resetn_reg, &released);
++		goto unlock;
++	}
++
++
+ 	/* disable in PMU sysreg */
+ 	if (!on && data->coupled_phy_id >= 0 &&
+ 	    state->phys[data->coupled_phy_id].phy->power_count == 0)
+@@ -249,9 +274,13 @@
+ 		regmap_update_bits(enable_map, data->enable_reg,
+ 				   data->enable_val, data->enable_val);
+ 
++unlock:
+ 	spin_unlock(&state->slock);
+ 
+-	return 0;
++	if (power_first)
++		pr_info("KLIMT-PHY reg=%#x before=%#x powered=%#x reset_released=%#x ret=%d\n",
++			data->enable_reg, before, powered, released, ret);
++	return ret;
+ }
+ 
+ #define to_mipi_video_phy(desc) \
