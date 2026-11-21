@@ -1,0 +1,66 @@
+--- a/drivers/gpu/drm/panel/panel-samsung-s6e3ha1-probe.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6e3ha1-probe.c
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+-/* SM-T700 S6E3HA1 2-nit framebuffer diagnostic. */
++/* SM-T700 S6E3HA1 105-nit framebuffer diagnostic. */
+
+ #include <linux/delay.h>
+ #include <linux/gpio/consumer.h>
+@@ -80,7 +80,7 @@
+ };
+ #define PANEL_COMMAND(seq, delay) { seq, ARRAY_SIZE(seq), delay }
+
+-static int s6e3ha1_prepare_2nit(struct s6e3ha1_probe *ctx)
++static int s6e3ha1_prepare_105nit(struct s6e3ha1_probe *ctx)
+ {
+ 	static const u8 test_f0_on[] = { 0xf0, 0x5a, 0x5a };
+ 	static const u8 test_f0_off[] = { 0xf0, 0xa5, 0xa5 };
+@@ -96,9 +96,9 @@
+ 	static const u8 write_at_33[] = { 0xb0, 0x20 };
+ 	static const u8 poc[] = { 0xfe, 0x08 };
+ 	static const u8 margin[] = { 0xff, 0x00, 0x00, 0x00, 0x08 };
+-#include "klimt-panel-2nit-gamma.h"
+-	static const u8 aor_2nit[] = { 0xb2, 0x09, 0xe3 };
+-	static const u8 elvss_2nit[] = { 0xb6, 0x9c, 0x13 };
++#include "klimt-panel-105nit-gamma.h"
++	static const u8 aor_105nit[] = { 0xb2, 0x03, 0xfe };
++	static const u8 elvss_105nit[] = { 0xb6, 0x9c, 0x13 };
+ 	static const u8 elvss_global[] = { 0xb0, 0x14 };
+ 	static const u8 acl_off[] = { 0x55, 0x00 };
+ 	static const u8 acl_avg_off[] = { 0xb5, 0x41 };
+@@ -122,9 +122,9 @@
+ 		PANEL_COMMAND(write_at_33, 0),
+ 		PANEL_COMMAND(poc, 0),
+ 		PANEL_COMMAND(margin, 0),
+-		PANEL_COMMAND(gamma_2nit, 0),
+-		PANEL_COMMAND(aor_2nit, 0),
+-		PANEL_COMMAND(elvss_2nit, 0),
++		PANEL_COMMAND(gamma_105nit, 0),
++		PANEL_COMMAND(aor_105nit, 0),
++		PANEL_COMMAND(elvss_105nit, 0),
+ 		PANEL_COMMAND(elvss_global, 0),
+ 		PANEL_COMMAND(elvss_normal, 0),
+ 		PANEL_COMMAND(acl_off, 0),
+@@ -195,7 +195,7 @@
+ 	if (ret < 0)
+ 		goto display_off;
+
+-	dev_info(&dsi->dev, "KLIMT-PANEL low-brightness power mode=%#x\n", power_mode);
++	dev_info(&dsi->dev, "KLIMT-PANEL 105-nit power mode=%#x\n", power_mode);
+ 	if ((power_mode & (BIT(2) | BIT(4))) == (BIT(2) | BIT(4)))
+ 		return 0;
+ 	ret = -EIO;
+@@ -290,10 +290,10 @@
+ 		goto disable_rails;
+ 	}
+
+-	ret = s6e3ha1_prepare_2nit(ctx);
++	ret = s6e3ha1_prepare_105nit(ctx);
+ 	if (ret < 0)
+ 		goto disable_rails;
+-	dev_info(dev, "KLIMT-PANEL calibrated 2-nit setup complete\n");
++	dev_info(dev, "KLIMT-PANEL calibrated 105-nit setup complete\n");
+
+ 	return 0;
+

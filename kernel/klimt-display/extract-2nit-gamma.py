@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract a unit's 2-nit S6E3HA1 gamma row from its stock kernel log."""
+"""Extract a unit's S6E3HA1 gamma row from its stock kernel log."""
 import argparse
 import re
 from pathlib import Path
@@ -7,6 +7,7 @@ from pathlib import Path
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("log", type=Path, help="Complete stock gamma_table output")
 parser.add_argument("header", type=Path, help="Private generated header")
+parser.add_argument("--nits", type=int, choices=(2, 105), default=2)
 args = parser.parse_args()
 
 rows = []
@@ -17,9 +18,11 @@ for line in args.log.read_text(errors="replace").splitlines():
 
 if len(rows) != 63:
     parser.error("expected exactly one 63-row stock S6E3HA1 gamma table")
-values = [f"0x{value.lower()}" for value in rows[0]]
+# Indices in the SM-T700 stock index_brightness_table.
+row_index = {2: 0, 105: 44}
+values = [f"0x{value.lower()}" for value in rows[row_index[args.nits]]]
 lines = [", ".join(values[start:start + 10]) for start in range(0, len(values), 10)]
 with args.header.open("x") as output:
-    output.write("\tstatic const u8 gamma_2nit[] = {\n")
+    output.write(f"\tstatic const u8 gamma_{args.nits}nit[] = {{\n")
     output.write("".join(f"\t\t{line},\n" for line in lines))
     output.write("\t};\n")
