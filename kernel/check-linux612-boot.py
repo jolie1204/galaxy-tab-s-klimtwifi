@@ -52,12 +52,17 @@ def check(boot, zimage, dtb, expanded_size):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--android', action='store_true',
+                        help='require the SM-T700 Android firmware node for first-stage init')
     for name in ('boot', 'zImage', 'dtb', 'Image'):
         parser.add_argument(name, type=Path)
     args = parser.parse_args()
     data = args.boot.read_bytes()
     try:
         size = check(data, args.zImage.read_bytes(), args.dtb.read_bytes(), args.Image.stat().st_size)
+        if args.android:
+            from android_firmware import require_android_dtb
+            require_android_dtb(args.dtb)
     except ValueError as error:
         parser.exit(1, f'{args.boot.name}: {error}\n')
     print(f'{args.boot.name} {len(data)} bytes, external ramdisk {size} bytes, '

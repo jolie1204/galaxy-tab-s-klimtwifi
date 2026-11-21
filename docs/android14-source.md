@@ -4,9 +4,23 @@ The Android 14 source build targets `lineage_klimtwifi` and Linux 6.12.118. Linu
 
 A subsequent audit found that the 13:33 Android BOOT omits the board-specific S-BOOT TLB fix. Using the 16 MiB ramdisk offset relative to the observed RAM base also caused the expanded kernel to overwrite the Android ramdisk in a host replay. The physical ramdisk placement remains unmeasured. [Binary comparison and six host replays](../kernel/decompressor/README.md#offline-review-of-the-two-november-20-boot-images)
 
+## SM-T700 hardware ID for Android first-stage mount
+
+The current standard and embedded Android BOOTs supply `universal5420` in the board's `/firmware/android/hardware` property. Android 14's libfstab reads this property when the parent is compatible with `android,firmware`. This selects the existing `fstab.universal5420` even when Samsung supplies other command-line arguments and omits the hardware ID. Android's second-stage init also imports properties from this node. [Current BOOT and paired SYSTEM checksums](../checksums/android14-firmware-dt-20261120.sha256)
+
+1. Apply the [Android firmware DTS patch](../android14/klimtwifi-android-firmware.patch) and the [S-BOOT TLB fix](../kernel/armv7-sboot-tlb.patch) in the Linux 6.12.118 source. Build the ARM zImage and `samsung/exynos5420-klimt-wifi.dtb` with the Android configuration below. Concatenate zImage followed by this DTB into `device/samsung/klimtwifi-kernel/zImage-dtb` in the Android checkout.
+2. Apply the [build-time firmware check](../android14/klimtwifi-boot-firmware-check.patch) in the Android checkout after the prebuilt and BOOT layout patches below. Copy the [validator](../kernel/android_firmware.py) to `device/samsung/klimtwifi-kernel/android_firmware.py` alongside the prebuilt. Run the product's `m bootimage`. The build uses its own host `fdtget` to check the board and Android properties on the kernel it will package.
+3. For independent verification add the Android checkout's `out/host/linux-x86/bin` to `PATH` and run `python3 check-linux612-boot.py --android BOOT ZIMAGE DTB IMAGE` from this repository's `kernel/` directory. The embedded assembler below also runs this check on its final image.
+
+As a regression test, the normal `bootimage` build received the previous prebuilt. It stopped at the missing firmware node before packaging. Restoring the corrected prebuilt produced the archived BOOT digest again. The verifier also rejected an incorrect hardware value and the sibling board.
+
+In Cortex-A15 emulation, an Android first-stage boot with a nonempty command line missing the hardware ID reproduced the fstab failure with the former tree. Four runs with the corrected board properties reached the EFS and SYSTEM partition wait. Those runs covered an omitted ID, the correct ID, two copies of the correct ID, and a conflicting ID. The guest used the Android ramdisk and a virtual board without the tablet's storage. Three separate replays of the packaged tablet images verified the complete expanded kernel and both firmware nodes at handoff, including the embedded build with the external initrd tag omitted. The device-tree change preserved the existing Samsung secure firmware node. The sibling Chagall Wi-Fi board compiled to its original DTB byte for byte.
+
+On the tablet, verify which partition uevents and device links Linux 6.12 presents for EFS and SYSTEM, then check first-stage mount and second-stage init. The standalone early-ADB probe runs its own RAM init and uses its own command line. Its decompressor checkpoints can be evaluated independently of Android fstab selection.
+
 ## Corrected Linux 6.12 BOOT images, November 20
 
-The ordinary `bootimage` target now packages the S-BOOT TLB fix and requests a ramdisk 128 MiB above the header base. An Android build with a built-in ramdisk also carries the complete first-stage userspace when the loader omits the initrd tag. The archived SYSTEM for the original build and the current platform output still have identical SHA-256 digests. The tablet has not run either of these new BOOTs. [Partition and image checksums](../checksums/linux612-hostfix-20261120.sha256)
+The first layout-corrected `bootimage` packaged the S-BOOT TLB fix and requested a ramdisk 128 MiB above the header base. An Android build with a built-in ramdisk also carried the complete first-stage userspace when the loader omitted the initrd tag. These earlier Android images used the empty-command-line hardware fallback. The independent diagnostic from this build remains the archived early-ADB candidate. [November 20 layout and diagnostic image checksums](../checksums/linux612-hostfix-20261120.sha256)
 
 | Local build output | Size | Userspace at kernel handoff |
 | --- | ---: | --- |

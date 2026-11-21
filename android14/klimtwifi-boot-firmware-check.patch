@@ -1,0 +1,25 @@
+--- a/device/samsung/klimtwifi/BoardConfig.mk
++++ b/device/samsung/klimtwifi/BoardConfig.mk
+@@ -30,6 +30,7 @@
+ TARGET_FORCE_PREBUILT_KERNEL := true
+ TARGET_PREBUILT_KERNEL := device/samsung/klimtwifi-kernel/zImage-dtb
+ TARGET_KERNEL_VERSION := 6.12
++BOARD_CUSTOM_BOOTIMG_MK := device/samsung/klimtwifi/bootimage.mk
+ # Keep the external Android ramdisk clear of the expanded kernel and S-BOOT tables.
+ BOARD_RECOVERY_MKBOOTIMG_ARGS := $(BOARD_MKBOOTIMG_ARGS) --ramdisk_offset 0x01000000
+ BOARD_MKBOOTIMG_ARGS += --ramdisk_offset 0x08000000
+--- /dev/null
++++ b/device/samsung/klimtwifi/bootimage.mk
+@@ -0,0 +1,12 @@
++# Validate the appended DTB before packaging the Android BOOT.
++klimt_fdtget := $(HOST_OUT_EXECUTABLES)/fdtget$(HOST_EXECUTABLE_SUFFIX)
++klimt_firmware_check := device/samsung/klimtwifi-kernel/android_firmware.py
++klimt_firmware_stamp := $(call intermediates-dir-for,PACKAGING,klimt_android_firmware)/verified
++$(klimt_firmware_stamp): $(INSTALLED_KERNEL_TARGET) $(klimt_fdtget) $(klimt_firmware_check)
++	@echo "Checking klimtwifi Android firmware DTB"
++	$(hide) mkdir -p $(dir $@)
++	$(hide) python3 $(klimt_firmware_check) $(INSTALLED_KERNEL_TARGET) $(klimt_fdtget)
++	$(hide) touch $@
++
++BOOTIMAGE_EXTRA_DEPS += $(klimt_firmware_stamp)
++include hardware/samsung/mkbootimg.mk

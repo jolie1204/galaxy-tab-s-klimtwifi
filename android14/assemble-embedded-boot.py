@@ -54,7 +54,7 @@ def assemble(boot, kernel_out, tools, output):
         device_tree = work / 'tablet.dtb'
         device_tree.write_bytes(dtb)
         checker = Path(__file__).resolve().parents[1] / 'kernel/check-linux612-boot.py'
-        subprocess.run([sys.executable, checker, candidate, arm / 'zImage',
+        subprocess.run([sys.executable, checker, '--android', candidate, arm / 'zImage',
                         device_tree, arm / 'Image'], check=True)
         candidate.replace(output)
 
