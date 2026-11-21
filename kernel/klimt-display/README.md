@@ -75,3 +75,11 @@ The patch applies with zero fuzz, all three exact packed replays passed, and the
 Both maximum-return packets completed on the physical SM-T700 with header-empty interrupts `0x10000000` and `0x11000000`. STATUS `0x8010040f` before the first DCS ID request matched the standing link state in the successful Samsung capture. Both DCS attempts still timed out without a receive interrupt. The next diagnostic separates LP-11 setup, panel reset and the request for the high-speed clock.
 
 The unchanged DTB and all three complete packed-image replays passed. Live ACM and three retained-console reads agreed. TWRP returned in software. Full BOOT readback was `83edf59dcd8f1b398374caafa3baa788834a26b371f39a972d2128efffe38e3c`. Original RECOVERY matched, and the clean SYSTEM and EFS payloads retained their hashes.
+
+## Physical Samsung panel response on Linux 6.12, trial 44
+
+[The LP-11 and reset patch](klimt-dsim-lp11-reset.patch) sets up DSIM without sending a packet while the S6E3HA1 is held in reset. It waits for the clock and all four data lanes to reach LP-11, pulses the reset, enables video and high-speed mode, then allows 18 ms to settle. The read uses the same F0 key sequences as Samsung's cold probe.
+
+On the SM-T700, LP-11 read back as STATUS `0x8010010f` with CLKCTRL `0x11f80008`. After the high-speed transition, CLKCTRL read `0x91f80008`. The panel generated RX_DONE at uptime 4.131 seconds and the driver read the physical panel ID `42:11:03`. Exynos DRM also registered its framebuffer. The trial stopped at communication with the panel and did not send display-on or brightness commands.
+
+The source patch applied with zero fuzz and matched the linked source. The unchanged DTB and all three full packed replays passed. Live USB ACM and three retained-console reads agreed. The tablet returned to TWRP by software. The full BOOT readback was `cd99f43e90b1bcdfbf64146d85e581aa51f36c01afada7fad422c111fa971280`. RECOVERY matched its prior digest, and clean SYSTEM and EFS retained their payload hashes.
