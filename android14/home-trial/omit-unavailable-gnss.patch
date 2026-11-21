@@ -1,0 +1,16 @@
+--- a/system/vendor/etc/vintf/manifest.xml
++++ b/system/vendor/etc/vintf/manifest.xml
+@@ -33,7 +33,2 @@
+         <fqname>@1.1::IDrmFactory/widevine</fqname>
+-    </hal>
+-    <hal format="hidl">
+-        <name>android.hardware.gnss</name>
+-        <transport>hwbinder</transport>
+-        <fqname>@1.0::IGnss/default</fqname>
+     </hal>
+--- a/system/vendor/etc/permissions/android.hardware.location.gps.xml
++++ b/system/vendor/etc/permissions/android.hardware.location.gps.xml
+@@ -19,3 +19,2 @@
+     <feature name="android.hardware.location" />
+-    <feature name="android.hardware.location.gps" />
+ </permissions>
