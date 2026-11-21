@@ -115,3 +115,21 @@ The retained audit found the same graphics metadata memfd reaching `priv_app` wi
 On the SM-T700, `sys.boot_completed=1` appeared at 195.870 seconds. The screen-timeout readback was 900000 milliseconds at 207.839 seconds. The diagnostic read back both RAM setup flags as 1 at 391.782 seconds. ActivityTaskManager reported `com.android.launcher3/.uioverrides.QuickstepLauncher` resumed at 439.500 seconds. The scope-specific graphics metadata denials were absent. The WindowManager focus and SurfaceFlinger display queries were unreported, so this run established the first resumed Home activity. A focused, composed frame on the physical panel remains to be verified.
 
 The kernel's diagnostic deadline requested recovery at 709.882 seconds and TWRP returned by software at 05:47:34 PST. Three retained-console copies, the complete existing BOOT, original RECOVERY and both clean SYSTEM and EFS payloads verified. The previous removable policy and polling script remain available for rollback.
+
+## Trial 64
+
+A vendor runtime resource overlay targeted `android:bool/config_displayColorFadeDisabled`. Host idmap2, using the exact fixture framework resources and the vendor policy, mapped that flag to true. The enforcing Android ARM build discovered the overlay package, reported `STATE_NO_IDMAP` and left DisplayPowerController's ColorFade enabled. On the SM-T700 the framework completed boot at 173.107 seconds and the live resource lookup returned false at 186.693 seconds.
+
+Both disposable initial-setup flags read back as 1 at 201.709 seconds. The real Trebuchet activity resumed at 532.704 seconds, with the internal HWC display 0 reporting `powerMode=On` at 546.669 seconds. The later 686.168-second sample again identified Trebuchet. The polling command selected WindowManager's windows dump. Android 14's `mCurrentFocus` field lives in its display contents dump. The incorrect query kept the capture guard from reaching `screencap`.
+
+The kernel requested recovery at 710.220 seconds. Fresh TWRP returned at 06:03:21 PST. The same complete BOOT and original RECOVERY readbacks matched.
+
+## Trial 65
+
+The unused runtime overlay was removed from the removable test image. [The exact resource patcher](set-colorfade-resource.py) accepts the audited original framework APK and changes one Boolean `config_displayColorFadeDisabled` value. Align the resulting APK with Android's `zipalign` and sign it with the matching AOSP platform test certificate. The full decoded resource table changed only from false to true on that entry. Every unsigned APK entry matched except those four data bytes, and the original Android signing-certificate digest verified. The enforcing ARM runtime reported `mColorFadeEnabled=false`.
+
+[The polling script](home65-poll.sh) obtains the real `mCurrentFocus` through `dumpsys window displays`, targets the internal SurfaceFlinger display for capture and accepts either 1600×2560 or 2560×1600. It verifies user 0 and tmpfs `/data` before updating the disposable profile. The revised focus query was separately checked with live WindowManager in the ARM guest. The host logic cases passed for both orientations and the user, focus and display gates.
+
+The SM-T700 reported `sys.boot_completed=1` at 198.995 seconds. The Android resource lookup confirmed `COLORFADE_DISABLED true` at 211.944 seconds. The real Trebuchet Home resumed at 267.623 seconds and the internal display was On at 298.020 seconds. This run observed the launcher roughly 265 seconds earlier than trial 64. A focused Home window and a composed Home frame were still unavailable. The same real launcher was sampled again just before Linux requested software recovery at 709.892 seconds.
+
+TWRP returned automatically at 06:18:46 PST. Three console reads, the complete reused BOOT, original RECOVERY and the clean internal SYSTEM and EFS payloads matched. The retained removable framework and polling script provide the diagnostic rollback. The next comparison changes the app rendering path to Skia GL.
