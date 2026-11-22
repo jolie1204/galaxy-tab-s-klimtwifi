@@ -71,7 +71,7 @@ inline void StartWatchdog() {
     // Fork after SwitchRoot so the child sees the installed Android property area.
     const pid_t child = fork();
     if (child == 0) {
-        sleep(900);
+        sleep(420);
         char boot_completed[PROP_VALUE_MAX] {};
         if (__system_properties_init() == 0 &&
             __system_property_get("sys.boot_completed", boot_completed) == 1 &&
@@ -82,6 +82,85 @@ inline void StartWatchdog() {
         Stop("FAIL watchdog framework boot incomplete");
     }
     if (child < 0) Stop("FAIL watchdog fork");
+}
+
+inline void LoadWifi() {
+    constexpr char path[] = "/vendor/lib/modules/klimt-wifi";
+    android::base::unique_fd folder(open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+    struct stat st {};
+    if (!folder.ok() || fstat(folder.get(), &st) || st.st_uid != 0 || (st.st_mode & 022) != 0) {
+        Send("WIFI_STAGE unavailable");
+        return;
+    }
+    if (!android::base::WriteStringToFile("/vendor/firmware",
+            "/sys/module/firmware_class/parameters/path")) {
+        Send("WIFI_STAGE firmware path error " + std::to_string(errno));
+        return;
+    }
+    auto load = [&](const char* name) {
+        android::base::unique_fd module(openat(folder.get(), name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC));
+        if (!module.ok() || fstat(module.get(), &st) || !S_ISREG(st.st_mode) ||
+            st.st_uid != 0 || (st.st_mode & 022) != 0) {
+            Send(std::string("WIFI_STAGE invalid ") + name);
+            return false;
+        }
+        if (syscall(SYS_finit_module, module.get(), "", 0) && errno != EEXIST) {
+            Send(std::string("WIFI_STAGE error ") + name + " " + std::to_string(errno));
+            return false;
+        }
+        Send(std::string("WIFI_STAGE load ") + name);
+        return true;
+    };
+    if (!load("cfg80211.ko") || !load("brcmutil.ko")) return;
+
+    // The core can otherwise probe before the separate WCC provider is registered.
+    constexpr char autoprobe[] = "/sys/bus/sdio/drivers_autoprobe";
+    std::string state;
+    if (!android::base::ReadFileToString(autoprobe, &state) ||
+        android::base::Trim(state) != "1" ||
+        !android::base::WriteStringToFile("0", autoprobe)) {
+        Send("WIFI_STAGE cannot defer SDIO probe");
+        return;
+    }
+    const bool loaded = load("brcmfmac.ko") && load("brcmfmac-wcc.ko");
+    constexpr char bind[] = "/sys/bus/sdio/drivers/brcmfmac/bind";
+    if (loaded) {
+        for (int attempt = 0; attempt != 60 && access(bind, W_OK) != 0; ++attempt)
+            usleep(50000);
+    }
+    if (!android::base::WriteStringToFile("1", autoprobe)) {
+        Send("WIFI_STAGE cannot restore SDIO autoprobe");
+        return;
+    }
+    if (!loaded) return;
+
+    for (const char* address : {"mmc1:0001:1", "mmc1:0001:2"}) {
+        const std::string radio = std::string("/sys/bus/sdio/devices/") + address;
+        std::string vendor, device;
+        if (!android::base::ReadFileToString(radio + "/vendor", &vendor) ||
+            android::base::Trim(vendor) != "0x02d0" ||
+            !android::base::ReadFileToString(radio + "/device", &device) ||
+            android::base::Trim(device) != "0x4354") {
+            Send(std::string("WIFI_STAGE BCM4354 identity unavailable ") + address);
+            return;
+        }
+        char target[192] = {};
+        const auto count = readlink((radio + "/driver").c_str(), target, sizeof(target) - 1);
+        const bool bound = count > 0 &&
+                android::base::EndsWith(std::string_view(target, count), "/brcmfmac");
+        if (!bound && !android::base::WriteStringToFile(address, bind)) {
+            Send(std::string("WIFI_STAGE SDIO bind error ") + address + " " + std::to_string(errno));
+            return;
+        }
+        Send(std::string("WIFI_STAGE SDIO bound ") + address);
+    }
+    Send("WIFI_STAGE SDIO bound with WCC provider");
+    for (int attempt = 0; attempt != 50 && access("/sys/class/net/wlan0", F_OK) != 0;
+         ++attempt) usleep(100000);
+    if (access("/sys/class/net/wlan0", F_OK) != 0) return;
+    Send("WIFI_STAGE wlan0 registered");
+
+
 }
 
 inline dev_t ProtectSystem() {

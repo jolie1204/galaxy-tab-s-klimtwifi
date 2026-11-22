@@ -1,0 +1,164 @@
+--- a/klimt-framework.rc
++++ b/klimt-framework.rc
+@@ -1,3 +1,5 @@
++import /system/etc/init/wificond.rc
++import /vendor/etc/init/android.hardware.wifi.supplicant-service.rc
+ import /system/etc/init/logd.rc
+ import /system/etc/init/lmkd.rc
+ import /system/etc/init/gatekeeperd.rc
+@@ -180,7 +182,6 @@
+     mkdir /mnt/user/0/emulated 0755 root root
+     mkdir /mnt/user/0/emulated/0 0755 root root
+
+-    # Prepare directories for pass through processes
+     mkdir /mnt/pass_through 0700 root root
+     mkdir /mnt/pass_through/0 0710 root media_rw
+     mkdir /mnt/pass_through/0/self 0710 root media_rw
+@@ -190,7 +191,6 @@
+     mkdir /mnt/expand 0771 system system
+     mkdir /mnt/appfuse 0711 root root
+
+-    # Storage views to support runtime permissions
+     mkdir /mnt/runtime 0700 root root
+     mkdir /mnt/runtime/default 0755 root root
+     mkdir /mnt/runtime/default/self 0755 root root
+@@ -201,7 +201,6 @@
+     mkdir /mnt/runtime/full 0755 root root
+     mkdir /mnt/runtime/full/self 0755 root root
+
+-    # Symlink to keep legacy apps working in multi-user world
+     symlink /storage/self/primary /mnt/sdcard
+     symlink /mnt/user/0/primary /mnt/runtime/default/self/primary
+
+@@ -210,6 +209,12 @@
+     mount none none /storage slave rec
+     start hwservicemanager
+     wait_for_prop hwservicemanager.ready true
++    setprop wifi.interface wlan0
++    mkdir /data/vendor/wifi 0770 wifi wifi
++    mkdir /data/vendor/wifi/wpa 0770 wifi wifi
++    mkdir /data/vendor/wifi/wpa/sockets 0770 wifi wifi
++    restorecon_recursive /data/vendor/wifi/wpa
++    start wificond
+     start vendor.keymaster-4-1
+     start vendor.gatekeeper-1-0
+     start vendor.memtrack-hal-1-0
+@@ -280,55 +285,6 @@
+     disabled
+     capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER SYS_ADMIN
+
+-# Init expands doubled dollars and unescapes the command as one argument.
+-service klimt-classpath-env /system/bin/sh -c hash=$$(printf\ 'export\ BOOTCLASSPATH\ %s\\nexport\ DEX2OATBOOTCLASSPATH\ %s\\nexport\ SYSTEMSERVERCLASSPATH\ %s\\nexport\ STANDALONE_SYSTEMSERVER_JARS\ %s\\n'\ \"$$BOOTCLASSPATH\"\ \"$$DEX2OATBOOTCLASSPATH\"\ \"$$SYSTEMSERVERCLASSPATH\"\ \"$$STANDALONE_SYSTEMSERVER_JARS\"\ |\ /system/bin/toybox\ sha256sum)\ ||\ exit\ 20;\
+-        set\ --\ $$hash;\
+-        [\ \"$${#1}\"\ =\ 64\ ]\ ||\ exit\ 21;\
+-        /system/bin/setprop\ debug.klimt_classpath_env\ \"$$1\"
+-    user shell
+-    group shell
+-    seclabel u:r:shell:s0
+-    disabled
+-    oneshot
+-
+-
+-service klimt-odrefresh /system/bin/sh -c "exec /apex/com.android.art/bin/odrefresh --check"
+-    seclabel u:r:su:s0
+-    user root
+-    group root
+-    disabled
+-    oneshot
+-
+-service klimt-art-log /system/bin/sh -c log=$$(/system/bin/logcat\ -b\ system\ -d\ -v\ raw\ -s\ odrefresh:I)\ ||\ exit\ 22;\
+-        case\ \"$$log\"\ in\ *\"ART\ APEX\ version\ 350090000\"*)\ version=1\ ;;\ *)\ version=0\ ;;\ esac;\
+-        case\ \"$$log\"\ in\ *\"Boot\ images\ on\ /system\ OK\ (arm)\"*)\ boot=ok\ ;;\ *\"Incomplete\ primary\ boot\ image\ or\ framework\ extension\ on\ /system:\"*)\ boot=missing_primary\ ;;\ *\"Incomplete\ boot\ image\ mainline\ extension\ on\ /system:\"*)\ boot=missing_mainline\ ;;\ *\"Checking\ boot\ images\ /data\ (arm)\"*)\ boot=system_ineligible\ ;;\ *)\ boot=unknown\ ;;\ esac;\
+-        case\ \"$$log\"\ in\ *\"system_server\ artifacts\ on\ /system\ OK\"*)\ server=ok\ ;;\ *\"Incomplete\ system\ server\ artifacts\ on\ /system:\"*)\ server=incomplete\ ;;\ *)\ server=unchecked\ ;;\ esac;\
+-        system=$$(printf\ '%s\\n'\ \"$$log\"\ |\ /system/bin/toybox\ grep\ -m\ 1\ -E\ \"System\ property\ .*non-default\ value|Userfaultfd\ GC\ check\ failed|Updated\ .*APEX.*mounted|Incomplete\ .*\ on\ /system\"\ |\ /system/bin/toybox\ cut\ -c1-85);\
+-        cache=$$(printf\ '%s\\n'\ \"$$log\"\ |\ /system/bin/toybox\ grep\ -m\ 1\ -E\ \"No\ prior\ cache-info\ file|Failed\ to\ (load|parse).*cache-info\"\ |\ /system/bin/toybox\ cut\ -c1-85);\
+-        /system/bin/setprop\ debug.klimt_art_system\ \"$$system\"\ ||\ exit\ 23;\
+-        /system/bin/setprop\ debug.klimt_art_cache\ \"$$cache\"\ ||\ exit\ 24;\
+-        /system/bin/setprop\ debug.klimt_art_log\ \"version=$$version,boot=$$boot,server=$$server\"
+-    user shell
+-    group shell log readproc
+-    seclabel u:r:shell:s0
+-    disabled
+-    oneshot
+-
+-
+-service klimt-cache /system/bin/sh -c "exec /apex/com.android.art/bin/odrefresh --compile"
+-    seclabel u:r:su:s0
+-    user root
+-    group root
+-    disabled
+-    oneshot
+-
+-service klimt-cache-recheck /system/bin/sh -c "exec /apex/com.android.art/bin/odrefresh --check"
+-    seclabel u:r:su:s0
+-    user root
+-    group root
+-    disabled
+-    oneshot
+-
+ service zygote /system/bin/app_process -Xzygote /system/bin --zygote --start-system-server --enable-lazy-preload
+     class main
+     priority -20
+@@ -359,29 +315,6 @@
+     disabled
+     oneshot
+
+-service klimt-display-log /system/bin/sh -c hwc=$$(/system/bin/logcat\ -b\ main\ -b\ system\ -d\ -v\ raw\ -s\ hwcomposer:W\ ComposerHal:W\ android.hardware.graphics.composer@2.1-service:W\ |\ /system/bin/toybox\ grep\ -m\ 1\ -v\ ^---------\ |\ /system/bin/toybox\ cut\ -c1-86);\
+-        sf=$$(/system/bin/logcat\ -b\ main\ -b\ system\ -d\ -v\ raw\ -s\ SurfaceFlinger:W\ EGL:W\ libEGL:W\ ANGLE:W\ Vulkan:W\ |\ /system/bin/toybox\ grep\ -m\ 1\ -v\ ^---------\ |\ /system/bin/toybox\ cut\ -c1-86);\
+-        installd=$$(/system/bin/logcat\ -b\ main\ -b\ system\ -d\ -v\ raw\ -s\ installd:W\ |\ /system/bin/toybox\ grep\ -m\ 1\ -v\ ^---------\ |\ /system/bin/toybox\ cut\ -c1-86);\
+-        vk=$$(/system/bin/logcat\ -b\ main\ -b\ system\ -d\ -v\ raw\ -s\ SurfaceFlinger:W\ libEGL:W\ ANGLE:W\ vulkan:V\ loader:W\ linker:W\ |\ /system/bin/toybox\ grep\ -m\ 1\ -Ei\ \"VK_ERROR|failed\ to\ (load|open)|Internal\ Vulkan\ error\"\ |\ /system/bin/toybox\ sed\ -E\ \"s/^.*(Internal\ Vulkan\ error|VK_ERROR)/\\1/\"\ |\ /system/bin/toybox\ cut\ -c1-86);\
+-        /system/bin/setprop\ debug.klimt_vk_error\ \"$$vk\";\
+-        p=$$(/system/bin/logcat\ -b\ main\ -d\ -v\ raw\ -s\ KlimtVulkan:I\ |\ /system/bin/toybox\ grep\ -m\ 1\ -E\ \"vkCreateInstance|Vulkan\ renderer\"\ |\ /system/bin/toybox\ cut\ -c1-86);\
+-        l=$$(/system/bin/logcat\ -b\ main\ -d\ -v\ raw\ -s\ KlimtVulkan:I\ |\ /system/bin/toybox\ grep\ -m\ 1\ -E\ \"SPHAL\ pastel|SPHAL\ loaded|Absolute\ pastel\"\ |\ /system/bin/toybox\ cut\ -c1-86);\
+-        device=$$(/system/bin/logcat\ -b\ main\ -d\ -v\ raw\ -s\ KlimtVulkan:I\ |\ /system/bin/toybox\ grep\ -m\ 1\ -F\ \"Vulkan\ renderer\"\ |\ /system/bin/toybox\ cut\ -c1-86);\
+-        location=$$(/system/bin/logcat\ -b\ main\ -d\ -v\ raw\ -s\ ANGLE:W\ libEGL:W\ |\ /system/bin/toybox\ grep\ -m\ 1\ -F\ \"Internal\ Vulkan\ error\"\ |\ /system/bin/toybox\ sed\ -E\ \"s/^.*implementation-specific.*,[[:space:]]*in[[:space:]]*//\"\ |\ /system/bin/toybox\ cut\ -c1-86);\
+-        /system/bin/setprop\ debug.klimt_vk_device\ \"$$device\";\
+-        /system/bin/setprop\ debug.klimt_vk_location\ \"$$location\";\
+-        /system/bin/setprop\ debug.klimt_vk_probe\ \"$$p\";\
+-        /system/bin/setprop\ debug.klimt_vk_load\ \"$$l\";\
+-        /system/bin/setprop\ debug.klimt_hwc_error\ \"$$hwc\"\ ||\ exit\ 23;\
+-        /system/bin/setprop\ debug.klimt_sf_error\ \"$$sf\"\ ||\ exit\ 24;\
+-        /system/bin/setprop\ debug.klimt_installd_error\ \"$$installd\"
+-    user shell
+-    group shell log readproc
+-    seclabel u:r:shell:s0
+-    disabled
+-    oneshot
+-
+-
+ service hwservicemanager /system/system_ext/bin/hwservicemanager
+     user system
+     group system readproc
+@@ -413,17 +346,6 @@
+ service klimt-vk-probe /system/bin/klimt-vulkan-probe
+     user shell
+     group shell log
+-    seclabel u:r:shell:s0
+-    disabled
+-    oneshot
+-
+-
+-service klimt-frame-capture /system/bin/sh -c /system/bin/toybox\ timeout\ 35\ /system/bin/screencap\ /data/local/tmp/klimt-frame.raw\ ||\ exit\ 30;\
+-        /system/bin/klimt-frame-probe\ /data/local/tmp/klimt-frame.raw;\ result=$$?;\
+-        frame=$$(/system/bin/logcat\ -b\ main\ -d\ -v\ raw\ -s\ KlimtFrame:I\ |\ /system/bin/toybox\ grep\ -m\ 1\ -F\ capture=);\
+-        /system/bin/setprop\ debug.klimt_frame\ \"$$frame\";\ exit\ $$result
+-    user shell
+-    group shell log readproc
+     seclabel u:r:shell:s0
+     disabled
+     oneshot
+@@ -698,3 +620,14 @@
+
+ on property:debug.klimt_diag_35=install_ready && property:sys.boot_completed=1
+     write /dev/kmsg "KLIMT-INSTALL READY persistent Android"
++
++on property:sys.boot_completed=1
++    start klimt-wifi-status
++
++service klimt-wifi-status /system/bin/sh /system/bin/klimt-wifi-status.sh
++    user shell
++    group shell log readproc
++    seclabel u:r:shell:s0
++    disabled
++    oneshot
++    timeout_period 330

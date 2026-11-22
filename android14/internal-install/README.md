@@ -23,6 +23,22 @@ python3 android14/internal-install/build_package.py \
 
 Before installing, preserve verified offline partitions, especially BOOT, SYSTEM and USERDATA, outside the tablet. Place the ZIP on an external microSD card and confirm its SHA-256. The installer checks the exact recovery and partition layout and both payload hashes before writing. It verifies SYSTEM after writing and completes the BOOT write last. The backups allow manual recovery if power or USB fails during a write. TWRP and the owner data are outside the installer write set.
 
+## Linux 6.12.118 Wi-Fi station integration
+
+Build ARM modules from the same source, configuration and build environment as the boot kernel. Keep `CONFIG_MODULES=y`, `CONFIG_CFG80211=m`, `CONFIG_BRCMUTIL=m`, `CONFIG_BRCMFMAC=m`, and the SDIO and BCDC options built into the brcmfmac module. Install `cfg80211.ko`, `brcmutil.ko`, `brcmfmac.ko`, and `brcmfmac-wcc.ko` under `/vendor/lib/modules/klimt-wifi` with root ownership and the existing `vendor_file` label. Early init defers SDIO autoprobe while it loads the Broadcom core and the separate WCC provider. It then verifies and binds both BCM4354 SDIO functions before checking for `wlan0`.
+
+Place the BCM4354 firmware, CLM data, and the authorized SM-T700 board NVRAM under `/vendor/firmware/brcm` using the Linux `brcmfmac4354-sdio` basenames. Install the signed regulatory database pair at the root of `/vendor/firmware`. Give these files the existing `vendor_firmware_file` label. Use [the Wi-Fi init change](wifi-init.patch) after the existing persistent framework changes. Keep Android's wificond, the Wi-Fi supplicant service and its AIDL declaration. Remove the legacy bcmdhd `android.hardware.wifi@1.0-service.legacy.xml` fragment from the offline SYSTEM image. This selects Android's vendor-Wi-Fi-HAL-free station path.
+
+Install [the connection observer](wifi-status.sh) as `/system/bin/klimt-wifi-status.sh` with mode 0755 and the existing `shell_exec` label. It reports saved-profile association, an IPv4 address and the default route using Android services. It reports either Android's internet validation or a successful gateway probe when available. The script ships without a wireless profile and uses no credentials.
+
+For the Wi-Fi installation candidate, the first-stage watchdog checks Android's boot-completed property after 420 seconds. It requests recovery only if Android has failed that check.
+
+## Physical Wi-Fi station trial on 2026-11-22
+
+With the existing Android 14 SYSTEM and USERDATA, the BOOT-only trial loaded the four modules, bound both BCM4354/1 functions, and registered `wlan0` at 6.620 seconds. The radio used Linux firmware 7.35.349.104 and the board's original NVRAM data. Android completed startup with SELinux enforcing. Its AIDL supplicant reported `COMPLETED` for the requested WPA2 profile, and repeated samples confirmed that association through 399.567 seconds of kernel uptime.
+
+At the end of the trial the Android Wi-Fi agent was still connecting, with only a link-local IPv6 address. IPv4 assignment, DNS and the default route were absent. The tablet returned to the original TWRP by software, and BOOT and RECOVERY readbacks matched the trial baseline. The profile remained on the existing USERDATA partition. The separate internal Wi-Fi installation archive passed ARM handoff replay, raw ext4 checks and whole-ZIP signature verification on the host. Its physical installation and saved-profile reconnection remain pending.
+
 ## Physical installation on 2026-11-21
 
 TWRP 3.7.0_9-0 verified both complete partition writes. The revised BOOT and untouched original RECOVERY were hashed again before boot. Existing USERDATA mounted as writable ext4, while SYSTEM remained read-only. The device reported Android boot completion at kernel uptime 122.727 seconds and later logged the resumed Google setup activity. The owner observed a continuously black internal panel. Treat this build as a diagnostic installation until visible output and input have been verified on the device. The physical device offered only the ACM log transport during this boot. The installed watchdog independently confirmed the boot-completion property after 905.626 seconds of kernel uptime.
