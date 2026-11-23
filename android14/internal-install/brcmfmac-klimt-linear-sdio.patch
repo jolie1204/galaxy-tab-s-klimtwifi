@@ -1,0 +1,31 @@
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bcmsdh.c
+@@ -757,7 +757,13 @@
+ 
+ 	func = sdiodev->func2;
+ 	host = func->card->host;
+-	sdiodev->sg_support = host->max_segs > 1;
++	if (sdiodev->settings->board_type &&
++	    !strcmp(sdiodev->settings->board_type, "samsung,klimt-wifi")) {
++		sdiodev->sg_support = false;
++		dev_info(sdiodev->dev, "Klimt SDIO using linear transfers\n");
++	} else {
++		sdiodev->sg_support = host->max_segs > 1;
++	}
+ 	max_blocks = min_t(uint, host->max_blk_count, 511u);
+ 	sdiodev->max_request_size = min_t(uint, host->max_req_size,
+ 					  max_blocks * func->cur_blksize);
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+@@ -3545,8 +3545,11 @@
+ 			container_of(work, struct brcmf_cfg80211_info,
+ 				     escan_timeout_work);
+ 
++	pr_info("Klimt SDIO scan timeout worker starting\n");
+ 	brcmf_inform_bss(cfg);
++	pr_info("Klimt SDIO scan timeout worker aborting firmware scan\n");
+ 	brcmf_notify_escan_complete(cfg, cfg->escan_info.ifp, true, true);
++	pr_info("Klimt SDIO scan timeout worker finished\n");
+ }
+ 
+ static void brcmf_escan_timeout(struct timer_list *t)

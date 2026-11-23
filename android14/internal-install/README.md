@@ -25,9 +25,11 @@ Before installing, preserve verified offline partitions, especially BOOT, SYSTEM
 
 ## Linux 6.12.118 Wi-Fi station integration
 
-Build ARM modules from the same source, configuration and build environment as the boot kernel. Keep `CONFIG_MODULES=y`, `CONFIG_CFG80211=m`, `CONFIG_BRCMUTIL=m`, `CONFIG_BRCMFMAC=m`, and the SDIO and BCDC options built into the brcmfmac module. Install `cfg80211.ko`, `brcmutil.ko`, `brcmfmac.ko`, and `brcmfmac-wcc.ko` under `/vendor/lib/modules/klimt-wifi` with root ownership and the existing `vendor_file` label. Early init defers SDIO autoprobe while it loads the Broadcom core and the separate WCC provider. It then verifies and binds both BCM4354 SDIO functions before checking for `wlan0`.
+Apply [the SM-T700 SDIO change](brcmfmac-klimt-linear-sdio.patch) to Linux 6.12.118. It selects linear transfers for the `samsung,klimt-wifi` board and adds diagnostics around scan timeout handling. Build ARM modules from the same source, configuration and build environment as the boot kernel. Keep `CONFIG_MODULES=y`, `CONFIG_CFG80211=m`, `CONFIG_BRCMUTIL=m`, `CONFIG_BRCMFMAC=m`, and the SDIO and BCDC options built into the brcmfmac module. Install `cfg80211.ko`, `brcmutil.ko`, `brcmfmac.ko`, and `brcmfmac-wcc.ko` under `/vendor/lib/modules/klimt-wifi` with root ownership and the existing `vendor_file` label. Early init defers SDIO autoprobe while it loads the Broadcom core and the separate WCC provider. It then verifies and binds both BCM4354 SDIO functions before checking for `wlan0`.
 
-Place the BCM4354 firmware, CLM data, and the authorized SM-T700 board NVRAM under `/vendor/firmware/brcm` using the Linux `brcmfmac4354-sdio` basenames. Install the signed regulatory database pair at the root of `/vendor/firmware`. Give these files the existing `vendor_firmware_file` label. Use [the Wi-Fi init change](wifi-init.patch) after the existing persistent framework changes. Keep Android's wificond, the Wi-Fi supplicant service and its AIDL declaration. Remove the legacy bcmdhd `android.hardware.wifi@1.0-service.legacy.xml` fragment from the offline SYSTEM image. This selects Android's vendor-Wi-Fi-HAL-free station path.
+For the validated combination, use the authorized SM-T700 OEM `bcmdhd_sta.bin` firmware version 7.26.28.8 and its board `nvram_net.txt` from the existing Android image. Install them as `/vendor/firmware/brcm/brcmfmac4354-sdio.bin` and `/vendor/firmware/brcm/brcmfmac4354-sdio.txt`. Keep the external CLM file with its corresponding generic Linux firmware if reproducing the earlier trial. Install the signed regulatory database pair at the root of `/vendor/firmware`. Give these files the existing `vendor_firmware_file` label.
+
+Use [the Wi-Fi init change](wifi-init.patch) after the existing persistent framework changes. Keep Android's wificond, the Wi-Fi supplicant service and its AIDL declaration. Remove the legacy bcmdhd `android.hardware.wifi@1.0-service.legacy.xml` fragment from the offline SYSTEM image. This selects Android's vendor-Wi-Fi-HAL-free station path.
 
 Install [the connection observer](wifi-status.sh) as `/system/bin/klimt-wifi-status.sh` with mode 0755 and the existing `shell_exec` label. It reports saved-profile association, an IPv4 address and the default route using Android services. It reports either Android's internet validation or a successful gateway probe when available. The script ships without a wireless profile and uses no credentials.
 
@@ -37,7 +39,17 @@ For the Wi-Fi installation candidate, the first-stage watchdog checks Android's 
 
 With the existing Android 14 SYSTEM and USERDATA, the BOOT-only trial loaded the four modules, bound both BCM4354/1 functions, and registered `wlan0` at 6.620 seconds. The radio used Linux firmware 7.35.349.104 and the board's original NVRAM data. Android completed startup with SELinux enforcing. Its AIDL supplicant reported `COMPLETED` for the requested WPA2 profile, and repeated samples confirmed that association through 399.567 seconds of kernel uptime.
 
-At the end of the trial the Android Wi-Fi agent was still connecting, with only a link-local IPv6 address. IPv4 assignment, DNS and the default route were absent. The tablet returned to the original TWRP by software, and BOOT and RECOVERY readbacks matched the trial baseline. The profile remained on the existing USERDATA partition. The separate internal Wi-Fi installation archive passed ARM handoff replay, raw ext4 checks and whole-ZIP signature verification on the host. Its physical installation and saved-profile reconnection remain pending.
+At the end of that trial the Android Wi-Fi agent was still connecting, with only a link-local IPv6 address. The first OEM firmware comparison received a DHCP offer, and the lease timed out while waiting for a DHCP acknowledgment. The board's GPX2 pin 0 out-of-band interrupt registered and delivered interrupts in a separate trial, with scan timeout still present.
+
+The OEM firmware with the linear-transfer module then associated automatically using the saved WPA2 profile. IpClient recorded DHCP DISCOVER, OFFER, REQUEST and ACK. Android reported IPv4 at kernel uptime 182.415 seconds and validated internet connectivity at 186.235 seconds. This run used the profile's automatic MAC mode and an unpinned access point. The software recovery returned to the original TWRP, where full BOOT and RECOVERY readbacks matched.
+
+## Physical internal installation on 2026-11-22
+
+The recovery-signed Wi-Fi installation ZIP SHA-256 is `55c2013b6c70d940aa62ee3eb9e8a95111930305abbeb53add3fe8f06a2c640c`. The archive contains the OEM firmware and the exact board-gated linear-transfer module from the successful trial. Independent host checks covered the raw ext4 filesystem, whole-ZIP CMS signature and all three ARM handoffs. TWRP verified the full SYSTEM and BOOT writes. Recovery readback confirmed both payloads and the original RECOVERY hash. The tablet already had the saved profile on its existing USERDATA.
+
+Installed Linux 6.12.118 mounted internal SYSTEM read-only and the existing ext4 USERDATA writable. Android reached `sys.boot_completed=1` at 123.139 seconds. At 187.073 seconds it was connected to the saved WPA2 profile with IPv4 and a default route. Android validated internet connectivity at 187.400 seconds. The tablet reached these checks automatically after software reboot. The normal watchdog independently verified boot completion at 426.126 seconds, and the tablet remained in Android on the same USB port.
+
+The boot log reported the Google setup activity. The external camera did not respond during this installation, so the visible setup screen and touch delivery remain unverified.
 
 ## Physical installation on 2026-11-21
 
@@ -45,7 +57,7 @@ TWRP 3.7.0_9-0 verified both complete partition writes. The revised BOOT and unt
 
 The two installed payloads match the local signed r2 archive byte for byte. The ARM bootloader replay passed with valid, invalid and missing ATAG cases. The archive passed detached whole-file CMS verification with the exact AOSP test certificate. The r2 ZIP SHA-256 is `e27831800195875e6245968d27985097cf80f404990d00d5e65e1f50f9fb5edd`. The off-device copies of the original BOOT, SYSTEM and USERDATA were checked against the original device hashes. The backup of USERDATA also passed a read-only ext4 check.
 
-Visible display output, touch, Android ADB, Wi-Fi, Bluetooth and battery reporting remain unverified. Keep the original TWRP and verified backups available.
+This installation left visible display output, touch, Android ADB, Wi-Fi, Bluetooth and battery reporting open. Keep the original TWRP and verified backups available.
 
 
 ## Direct display check with the stock-calibrated 105-nit setting
