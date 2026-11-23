@@ -4,7 +4,7 @@
 
 SM-T700 실기에서 Linux 6.12.118 기반 Android 14의 Trebuchet 홈 화면까지 부팅했습니다. 읽기 전용 microSD와 RAM 데이터로 시험했고, 내장 패널이 켜진 상태에서 400×640 캡처의 실제 RGB 픽셀을 확인했습니다. [69차 실기 기록](android14/home-trial/README.md#trial-69)
 
-Linux 6.12.118 기반 Android 14를 SM-T700의 내부 저장소에 설치했습니다. 재부팅한 태블릿이 저장된 WPA2 프로필로 자동 연결되었고, IPv4 할당과 인터넷 연결을 확인했습니다. 기존 USERDATA와 TWRP는 보존했습니다. [설치 ZIP 제작 및 실기 기록](android14/internal-install/README.md#physical-internal-installation-on-2026-11-22)
+Linux 6.12.118 기반 Android 14를 SM-T700의 내부 저장소에 설치했습니다. 첫 부팅에서 저장된 WPA2 프로필로 자동 연결됐고, IPv4 할당과 인터넷 연결을 확인했습니다. 이후 Android 시스템 프로세스가 종료됐고 화면 중앙은 검게 남았습니다. 기존 USERDATA와 TWRP는 보존했습니다. [설치 ZIP 제작 및 실기 기록](android14/internal-install/README.md#physical-internal-installation-on-2026-11-22)
 
 The repacker takes one exact retiredtab LineageOS 21 full OTA, modifies its SYSTEM image offline, and rebuilds the TWRP ZIP with the original BOOT payload. The hardware-tested Slim ROM runs Android 14 (API 34) on the base ROM's Linux 3.4.113 kernel. Several patches listed in the maintainer's October build notes were unavailable during the trial, so the repacker uses the published OTA as its input. A separate Linux 6.12.118 RAM diagnostic provided an authenticated USB ADB shell and returned to TWRP by software request. [Hardware trial and board setting](kernel/early-adb/README.md#authenticated-usb-adb-on-linux-612-trial-19)
 

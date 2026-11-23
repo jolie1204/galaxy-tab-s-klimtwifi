@@ -47,9 +47,11 @@ The OEM firmware with the linear-transfer module then associated automatically u
 
 The recovery-signed Wi-Fi installation ZIP SHA-256 is `55c2013b6c70d940aa62ee3eb9e8a95111930305abbeb53add3fe8f06a2c640c`. The archive contains the OEM firmware and the exact board-gated linear-transfer module from the successful trial. Independent host checks covered the raw ext4 filesystem, whole-ZIP CMS signature and all three ARM handoffs. TWRP verified the full SYSTEM and BOOT writes. Recovery readback confirmed both payloads and the original RECOVERY hash. The tablet already had the saved profile on its existing USERDATA.
 
-Installed Linux 6.12.118 mounted internal SYSTEM read-only and the existing ext4 USERDATA writable. Android reached `sys.boot_completed=1` at 123.139 seconds. At 187.073 seconds it was connected to the saved WPA2 profile with IPv4 and a default route. Android validated internet connectivity at 187.400 seconds. The tablet reached these checks automatically after software reboot. The normal watchdog independently verified boot completion at 426.126 seconds, and the tablet remained in Android on the same USB port.
+Installed Linux 6.12.118 mounted internal SYSTEM read-only and the existing ext4 USERDATA writable. Android reached `sys.boot_completed=1` at 123.139 seconds. At 187.073 seconds it was connected to the saved WPA2 profile with IPv4 and a default route. Android validated internet connectivity at 187.400 seconds. The tablet reached these checks automatically after software reboot.
 
-The boot log reported the Google setup activity. The external camera did not respond during this installation, so the visible setup screen and touch delivery remain unverified.
+At 214.200 seconds Zygote received SIGKILL. Its one-shot init service left it stopped, and the Wi-Fi supplicant exited at 215.361 seconds. The watchdog at 426.126 seconds read the retained boot-completion property. The surviving USB ACM transport belonged to Linux and only carried logs. The owner subsequently confirmed a black main area with Android navigation or status icons visible.
+
+The retained Android crash record shows `NoSuchElementException` from `Watchdog.addInterestingHidlPids` while collecting diagnostics for a hang. Two earlier watchdog dumps also show the Android UI thread waiting in `RenderProxy::setStopped`. The installation result verified the partition writes and initial Wi-Fi connection. Sustained Android operation and the cause of the rendering stall are open.
 
 ## Physical installation on 2026-11-21
 
