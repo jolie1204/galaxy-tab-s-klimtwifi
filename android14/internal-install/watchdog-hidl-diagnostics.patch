@@ -1,0 +1,12 @@
+--- a/services/core/java/com/android/server/Watchdog.java
++++ b/services/core/java/com/android/server/Watchdog.java
+@@ -790,7 +790,8 @@
+ 
+                 pids.add(info.pid);
+             }
+-        } catch (RemoteException e) {
++        } catch (Exception e) {
++            // A missing HIDL service manager can throw NoSuchElementException.
+             Log.w(TAG, e);
+         }
+     }
